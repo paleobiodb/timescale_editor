@@ -20,7 +20,7 @@
 // defines some other javascript global variables and also provides the header bar for the
 // resulting web page.
 
-var tsapp = new TimescaleEditorApp('%%data_url%%', '%%is_contributor%%');
+var tsapp = new TimescaleEditorApp('%%test_data_url%%', '%%app_resources%%', '%%is_contributor%%');
 document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
 
 //  End -->
@@ -72,6 +72,8 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
 		</td></tr>
 	    <tr><td>Timescale type:</td>
 	        <td><select id="ts_type" onchange="tsapp.checkTimescaleAttrs()"></select>
+		  <span style="margin-left: 20px;">Timescale id:<span>
+	            <input id="ts_id" type="text" size="8" disabled/>		
 	        </td></tr>
 	    <tr><td>Timescale extent:</td>
 	        <td><input id="ts_extent" type="text" size="40" onchange="tsapp.checkTimescaleAttrs()"/>
@@ -85,6 +87,8 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
 	<form id="bounds_form" name="bounds_form">
 	  <input type="button" name="save" value="Save changes" onclick="tsapp.saveBoundsForm()">
 	  <input type="reset" name="reset" value="Reset">
+	  <input type="button" name="model" value="Model" onclick="tsapp.modelBoundsForm(event)"
+		 style="margin-left: 50px">
 	  <table id="bounds_box" border="1" style="margin-top: 20px;">
 	  </table>
         </form>
@@ -100,8 +104,8 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
   <div class="tsed_modal_content" style="max-height: 300">
     <span class="close" onclick="tsapp.closeBoundSelector()">&times;</span>
     <h3>Select a boundary from one of the following timescales:</h3>
-    <table width="80%">
-    <tr><td width="40%">
+    <table width="80%" cellpadding="5">
+    <tr style="vertical-align: top"><td width="40%">
         <table id="bound_selector_timescales" style="overflow-y: scroll">
         </table></td>
 	<td>

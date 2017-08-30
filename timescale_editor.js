@@ -18,7 +18,7 @@
 // a good idea to call this after the entire web page is loaded, so that all necessary DOM
 // elements will be in place.
 
-function TimescaleEditorApp ( data_url, is_contributor )
+function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 {
     "use strict";
     
@@ -43,9 +43,13 @@ function TimescaleEditorApp ( data_url, is_contributor )
     var edit_bounds_attrs;
     
     var base_timescale_id;
+    var base_bound_id;
     
     var bound_selector_box;
     var bound_selector_callback;
+    
+    var international_no = { 'tsc:1': 1, 'tsc:2': 2, 'tsc:3': 3,
+			     'tsc:4': 4, 'tsc:5' : 5 };
     
     var form_elt = { };
     
@@ -53,54 +57,14 @@ function TimescaleEditorApp ( data_url, is_contributor )
     
     var hi_color = 'lightblue';
     
-    // var done_config1, done_config2;
+    var model_match_diff = 2.0;
+    var model_match_frac = 0.05;
     
-    // var params = { base_name: '', interval: '', output_metadata: 1, reftypes: 'taxonomy' };
-    // var param_errors = { };
-
-    // var visible = { };
+    var done_config1, done_config2;
     
-    // var data_type = "occs";
-    // var data_op = "occs/list";
-    // var url_op = "occs/list";
-
-    // var data_format = ".csv";
-    // var ref_format = "";
-    // var non_ref_format = ".csv";
-
-    // var form_mode = "simple";
-    
-    // var output_section = 'none';
-    // var output_order = 'none';
-    
-    // var output_full = { };
-    // var full_checked = { };
-    
-    // var confirm_download = 0;
-    // var taxon_status_save = '';
-
-    // var no_update = 0;
-
     // Objects for holding data cached from the API
     
     var api_data = { };
-    
-    // // Variables for handling object identifiers in the "metadata" section.
-    
-    // var id_param_map = { col: "coll_id", clu: "clust_id",
-    // 			  occ: "occ_id", spm: "spec_id" };
-    // var id_param_index = { col: 0, clu: 1, occ: 2, spm: 3 };
-    
-    // // The following regular expressions are used to validate user input.
-    
-    // var patt_dec_num = /^[+-]?(\d+[.]\d*|\d*[.]\d+|\d+)$/;
-    // var patt_dec_pos = /^(\d+[.]\d*|\d*[.]\d+|\d+)$/;
-    // var patt_int_pos = /^\d+$/;
-    // var patt_name = /^(.+),\s+(.+)/;
-    // var patt_name2 = /^(.+)\s+(.+)/;
-    // var patt_has_digit = /\d/;
-    // var patt_date = /^(\d+[mshdMY]|\d\d\d\d(-\d\d(-\d\d)?)?)$/;
-    // var patt_extid = /^(col|occ|clu|spm)[:]\d+$/;
     
     // The following function initializes this application controller object.  It is exported as
     // a method, so that it can be called once the web page is fully loaded.  It must make two
@@ -150,6 +114,10 @@ function TimescaleEditorApp ( data_url, is_contributor )
 	$.getJSON(data_url + 'timescales/list.json?all_records')
 	    .done(callbackListTimescales)
 	    .fail(badInit);
+
+	$.getJSON(data_url + 'bounds/list.json?timescale_id=tsc:1,tsc:2,tsc:3,tsc:4,tsc:5')
+	    .done(callbackListBounds)
+	    .fail(badInit);
     }
     
     this.initApp = initApp;
@@ -166,8 +134,6 @@ function TimescaleEditorApp ( data_url, is_contributor )
 	
 	api_data.timescales = [ ];
 	api_data.timescales_id = { };
-	api_data.bounds_list = { };
-	api_data.bounds_id = { };
 	
 	for ( var i=0; i < response.records.length; i++ )
 	{
@@ -177,14 +143,123 @@ function TimescaleEditorApp ( data_url, is_contributor )
 	    api_data.timescales_id[record.oid] = record;
 	}
 	
-	// // If both API calls are complete, finish the initialization process. 
+	// If both API calls are complete, finish the initialization process. 
 	
-	// done_config1 = 1;
-	// if ( done_config2 ) finishInitApp();
+	done_config1 = 1;
+	if ( done_config2 ) finishInitApp();
 	
-	finishInitApp();
 	refreshTimescales("timescales_box", "tsapp.selectTimescale");
 	refreshTimescales("bound_selector_timescales", "tsapp.selectBaseTimescale");
+    }
+    
+    function callbackListBounds (response)
+    {
+	// If no results were received, we're in trouble.  The application can't be used if the
+	// API is not working, so there's no point in proceeding further.
+	
+	if ( ! response.records )
+	    badInit();
+	
+	// Otherwise, store all of the response records in the appropriate array.
+	
+	api_data.bounds_timescale_id = { };
+	api_data.bounds_id = { };
+	api_data.ics_by_age = { };
+	api_data.ics_ages = [ ];
+	api_data.ics_best = { };
+	api_data.bounds_dep = { };
+	
+	for ( var i=0; i < response.records.length; i++ )
+	{
+	    var record = response.records[i];
+	    var age = record.age;
+	    var scale_no = international_no[record.sid];
+	    
+	    // Store each bounds record in all of the appropriate arrays.
+	    
+	    record.scale_no = scale_no;
+	    
+	    if ( ! api_data.bounds_timescale_id[record.sid] )
+		api_data.bounds_timescale_id[record.sid] = [ ];
+	    
+	    api_data.bounds_timescale_id[record.sid].push(record);
+	    
+	    api_data.bounds_id[record.oid] = record;
+	    
+	    // Fill in any dependencies.
+	    
+	    if ( record.bid )
+	    {
+		if ( ! api_data.bounds_dep[record.bid] ) api_data.bounds_dep[record.bid] = { };
+		api_data.bounds_dep[record.bid][record.oid] = 1;
+	    }
+	    
+	    if ( record.tid )
+	    {
+		if ( ! api_data.bounds_dep[record.tid] ) api_data.bounds_dep[record.tid] = { };
+		api_data.bounds_dep[record.tid][record.oid] = 1;
+	    }
+	    
+	    if ( record.cid )
+	    {
+		if ( ! api_data.bounds_dep[record.cid] ) api_data.bounds_dep[record.cid] = { };
+		api_data.bounds_dep[record.cid][record.oid] = 1;
+	    }
+	    
+	    if ( record.rid )
+	    {
+		if ( ! api_data.bounds_dep[record.rid] ) api_data.bounds_dep[record.rid] = { };
+		api_data.bounds_dep[record.rid][record.oid] = 1;
+	    }
+	    
+	    // Now fill in the best record for each distinct age in the ICS timescales.
+	    
+	    if ( ! api_data.ics_by_age[age] )
+	    {
+		api_data.ics_ages.push(age);
+		api_data.ics_by_age[age] = [ ];
+	    }
+	    
+	    api_data.ics_by_age[age].push(record);
+	    
+	    if ( age <= 70.0 && scale_no )
+	    {
+		if ( scale_no == 4 )
+		    api_data.ics_best[age] = record;
+		
+		else if ( scale_no == 5 && ! api_data.ics_best[age] )
+		    api_data.ics_best[age] = record;
+	    }
+	    
+	    else if ( scale_no )
+	    {
+		if ( scale_no == 3 )
+		    api_data.ics_best[age] = record;
+		
+		else if ( scale_no > 3 && ! api_data.ics_best[age] )
+		    api_data.ics_best[age] = record;
+		    
+		else if ( scale_no > 3 && scale_no < api_data.ics_best[age].scale_no )
+		    api_data.ics_best[age] = record;
+		
+		else if ( ! api_data.ics_best[age] || scale_no > api_data.ics_best[age].scale_no )
+		    api_data.ics_best[age] = record;
+	    }
+	}
+	
+	// Sort the list of ICS ages.
+	
+	api_data.ics_ages.sort( function(a, b) { return a - b; } );
+	
+	for ( var a in api_data.ics_by_age ) 
+	{
+	    api_data.ics_by_age[a].sort( function(a, b) { return a.scale_no - b.scale_no } );
+	}
+	
+	// If both API calls are complete, finish the initialization process. 
+	
+	done_config1 = 2;
+	if ( done_config1 ) finishInitApp();
     }
     
     // This function notifies the user that this application is not able to be used.  It is called
@@ -206,17 +281,14 @@ function TimescaleEditorApp ( data_url, is_contributor )
 	
 	init_box.style.display = 'none';
 	
-	// no_update = 1;
+	// clear timescale attrs form
 	
-	try {
-	    // do nothing for now.
-	}
-
-	catch (err) { };
-	
-	// no_update = 0;
-	
-	// updateFormState();
+	setElementValue('ts_name', '');
+	setElementValue('ts_id', '');
+	setElementValue('ts_min_age', '');
+	setElementValue('ts_max_age', '');
+	setElementValue('ts_extent', '');
+	setElementValue('ts_taxon', '');
     }
     
     this.api_data = api_data;
@@ -301,11 +373,17 @@ function TimescaleEditorApp ( data_url, is_contributor )
 	{
 	    var record = api_data.timescales[i];
 	    
-	    if ( record.ext && record.ext == "international" )
+	    if ( ! record.oid ) continue;
+	    
+	    record.tno = Number(record.oid.replace(/^tsc:/, ''));
+	    
+	    if ( record.ext && record.ext == "ics" )
 		internationals.push(record);
 	    else
 		others.push(record);
 	}
+	
+	internationals.sort( function(a, b) { return a.tno - b.tno } );
 	
 	var content = "";
 	
@@ -345,12 +423,21 @@ function TimescaleEditorApp ( data_url, is_contributor )
     
     function displayBoundsList ( display_element, timescale_id )
     {
+	display_element.innerHTML = "<tr><td>loading...</td></tr>";
+
+	var records = api_data.bounds_timescale_id[timescale_id];
 	
-	display_element.innerHTML = "loading...";
-	
-	$.getJSON(data_url + 'bounds/list.json?timescale_id=' + timescale_id)
-	    .done(function ( response ) { displayBoundsListResult(display_element, timescale_id, response.records) })
-	    .fail(function ( xhr ) { display_element.innerHTML = "ERROR: could not load bounds"; failSaveBounds(xhr); });
+	if ( records && records.length > 0 )
+	{
+	    display_element.innerHTML = generateBoundsFormContent( timescale_id, records );
+	}
+
+	else
+	{
+	    $.getJSON(data_url + 'bounds/list.json?timescale_id=' + timescale_id)
+		.done(function ( response ) { displayBoundsListResult(display_element, timescale_id, response.records) })
+		.fail(function ( xhr ) { display_element.innerHTML = "ERROR: could not load bounds"; failSaveBounds(xhr); });
+	}
     }
     
     this.displayBoundsList = displayBoundsList;
@@ -358,17 +445,66 @@ function TimescaleEditorApp ( data_url, is_contributor )
     function displayBoundsListResult ( display_element, timescale_id, records )
     {
 	if ( records )
+	{
+	    api_data.bounds_timescale_id[timescale_id] = records;
+	    updateBoundsData(records);
+	    
 	    display_element.innerHTML = generateBoundsFormContent( timescale_id, records );
+	}
 	else
-	    display_element.innerHTML = "ERROR: no records";
+	{
+	    display_element.innerHTML = "<td><tr>ERROR: no records</td></tr>";
+	}
+    }
+
+    function updateBoundsData ( records )
+    {
+	// Update each bounds record under bounds_id
+	
+	for ( var i=0; i < records.length; i++ )
+	{
+	    api_data.bounds_id[records[i].oid] = records[i];
+	}
+	
+	// Then go through the list again and check to see if any of the bounds this one depends
+	// on are not yet loaded. If so, then load them.
+	
+	var to_load = { };
+	
+	for ( var i=0; i < records.length; i++ )
+	{
+	    if ( records[i].bid && ! api_data.bounds_id[records[i].bid] )
+		to_load[records[i].bid] = 1;
+	    
+	    if ( records[i].tid && ! api_data.bounds_id[records[i].tid] )
+		to_load[records[i].tid] = 1;
+	    
+	    if ( records[i].cid && ! api_data.bounds_id[records[i].cid] )
+		to_load[records[i].tid] = 1;
+	    
+	    if ( records[i].fid && ! api_data.bounds_id[records[i].fid] )
+		to_load[records[i].fid] = 1;
+	}
+	
+	var load_list = [ ];
+	
+	for ( var id in to_load )
+	{
+	    load_list.push(id);
+	}
+	
+	if ( load_list.length )
+	{
+	    var id_list = load_list.join(',');
+	    
+	    alert("Need to load following ids: " + id_list);
+	}
     }
     
     function generateBoundsFormContent ( timescale_id, records )
     {
 	// First go through the records and save the content under 'api_data'. Also collect up a
 	// list of the identifiers of any base bounds.
-	
-	api_data.bounds_list[timescale_id] = records;
 	
 	bounds_edit.n_bounds = records.length;
 	bounds_edit.values = [ ];
@@ -378,17 +514,17 @@ function TimescaleEditorApp ( data_url, is_contributor )
 	for ( var i=0; i < records.length; i++ )
 	{
 	    var oid = records[i].oid;
-	    api_data.bounds_id[oid] = records[i];
 	    
 	    var base_oid = records[i].bid;
 	    var top_oid = records[i].tid;
 	    var color_oid = records[i].cid;
 	    
-	    bounds_edit.values[i] = { oid: oid, bid: base_oid, tid: top_oid, cid: color_oid };
+	    bounds_edit.values[i] = { oid: oid, btp: records[i].btp, ofs: records[i].ofs,
+				      bid: base_oid, tid: top_oid, cid: color_oid };
 	    
-	    if ( base_oid ) base_bounds.push(base_oid);
-	    if ( top_oid ) base_bounds.push(top_oid);
-	    if ( color_oid ) base_bounds.push(color_oid);
+	    if ( base_oid && ! api_data.bounds_id[base_oid] ) base_bounds.push(base_oid);
+	    if ( top_oid && ! api_data.bounds_id[top_oid] ) base_bounds.push(top_oid);
+	    if ( color_oid && ! api_data.bounds_id[color_oid] ) base_bounds.push(color_oid);
 	}
 	
 	// If we have found any base bounds, fire off a query to get their info as well. Once the
@@ -422,16 +558,16 @@ function TimescaleEditorApp ( data_url, is_contributor )
     
     function generateBoundsFormRow( i, record, prev_interval )
     {
-	var content = "<tr><td>";
+	var content = '<tr id="bound_row_' + i + '"><td>';
 	
 	if ( i > 0 ) content += intervalInput(i, record);
 	content += oidField(i, record);
 	content += ageInput(i, record);
 	content += btpInput(i, record);
 
-	content += "</td><td>";
+	content += '</td><td id="bound_reftd_' + i + '">';
 	
-	content += boundsRefInput( i, record );
+	content += boundsBaseContent( i, record );
 	
 	content += "</td></tr>\n";
 	
@@ -470,60 +606,200 @@ function TimescaleEditorApp ( data_url, is_contributor )
 	var content = '&nbsp;<select class="tsed_control" id="bound_type_' + i + 
 	    '" onchange="tsapp.setBoundType(' + i + ')">\n';
 	
-	for ( var i=0; i<form_elt.btps.length; i++ )
+	for ( var j=0; j<form_elt.btps.length; j++ )
 	{
-	    var value = form_elt.btps[i];
+	    var value = form_elt.btps[j];
 	    var selected = ''; if ( value == record.btp ) selected = ' selected';
 	    
-	    content += '<option value="' + value + '"' + selected + ">" + form_elt.btpnames[i] + "</option>\n";
+	    content += '<option value="' + value + '"' + selected + ">" + form_elt.btpnames[j] + "</option>\n";
 	}
 	
 	content += "</select>\n";
 	
+	var src = '/nospike.png';
+	if ( record.spk ) src = '/spike.png';
+	
+	content += '<img id="bound_spike_' + i + '" width="20" height="20" src="' + resource_url + src + '">' + "\n";
+	
 	return content;
     }
     
-    function boundsRefInput ( i, record )
+    function boundsBaseContent ( i, record )
     {
-	if ( ! ( typeof(record) == "object" && record.btp && 
-		 ( record.btp == "same" || 
-		   record.btp == "percent" || 
-		   record.btp == "offset" ) ) )
+	if ( ! typeof(record) == "object" && record.btp )
 	    return "";
 	
-	var content = '<span id="base_bound_' + i + '" class="tsed_timescale_label" ' +
-	    'onclick="tsapp.selectBaseBound(\'base\',' + i + ')"></span>';
+	var content = '';
 	
-	if ( record.btp == "percent" )
-	    content += '<br/><span id="range_bound_' + i + '" class="tsed_timescale_label" ' +
-	    'onclick="tsapp.selectBaseBound(\'range\',' + i + ')"></span>';
+	var start_tag = '<span id="base_bound_' + i + '" class="tsed_timescale_label" ' +
+	    'onclick="tsapp.selectBaseBound(\'base\',' + i + ')">';
+	
+	if ( record.btp == "same" || record.btp == "offset" )
+	{
+	    var base_record = api_data.bounds_id[record.bid];
+	    var base_label = 'unknown';
+	    var base_age = '';
+	    
+	    if ( base_record )
+	    {
+		base_label = base_record.inm || 'unknown';
+		base_age = base_record.age || '';
+		
+		if ( base_record.age == "0" )
+		    base_label = 'Present';
+		
+	    	if ( base_record.sid > 5 )
+		{
+		    var base_tsrecord = api_data.timescales_id[base_record.sid];
+		    base_label += ' [' + base_tsrecord.nam + ']';
+		}
+		
+		var spike_elt = document.getElementById('bound_spike_' + i);
+		
+		if ( spike_elt && record.btp == 'same' )
+		{
+		    if ( base_record.spk )
+			spike_elt.src = resource_url + '/spike.png';
+		    else
+			spike_elt.src = resource_url + '/nospike.png';
+		}
+	    }
+	    
+ 	    if ( record.btp == "offset" )
+	    {
+		var offset = record.ofs != undefined ? record.ofs : '';
+		var ofsfield = '<input class="tsed_control" id="bound_offset_' + i + 
+		    '" type="text" size="6" value="' + offset + '"> from ';
+		
+		if ( base_age != '' ) label += ' (' + base_age + ')';
+		
+		content = ofsfield + start_tag + base_label + '</span>';
+	    }
+	    
+	    else
+	    {
+		content = start_tag + base_label + '</span>';
+	    }
+
+	    if ( record.age_diff )
+	    {
+		var rounded = Math.round(record.age_diff * 1000) / 1000;
+		content += '<span class="tsed_diff"> (' + rounded + ')</span>';
+	    }
+	}
+	
+	else if ( record.btp == "percent" )
+	{
+	    var base_record = api_data.bounds_id[record.bid];
+	    var top_record = api_data.bounds_id[record.tid];
+	    var base_label = 'unknown';
+	    var top_label = 'unknown';
+	    var base_age = '';
+	    var top_age = '';
+	    
+	    if ( base_record && top_record )
+	    {
+		base_label = base_record.inm || 'unknown';
+		top_label = top_record.inm || 'unknown';
+		
+	    	if ( base_record.sid > 5 || top_record.sid > 5 )
+		{
+		    var base_tsrecord = api_data.timescales_id[base_record.sid];
+		    var top_tsrecord = api_data.timescales_id[top_record.sid];
+		    
+		    if ( base_record.sid == top_record.sid )
+		    {
+			top_label += ' / ' + base_tsrecord.nam;
+		    }
+		    
+		    else
+		    {
+			base_label += ' / ' + base_tsrecord.nam;
+			top_label += ' / ' + top_tsrecord.nam;
+		    }
+		}
+		
+		if ( base_record.age != undefined )
+		    base_label += ' (' + base_record.age + ')';
+		if ( top_record.age != undefined )
+		    top_label += ' (' + top_record.age + ')';
+	    }
+	    
+	    var percent = record.ofs != undefined ? record.ofs : '';
+	    var pctfield = '<input class="tsed_control" id="bound_percent_' + i + 
+		'" type="text" size="6" value="' + percent + '"> of ';
+	    
+	    content = pctfield + start_tag + base_label + ' - ' + top_label + '</span>';
+	}
 	
 	return content;
     }
     
-    function setBoundType ( i )
+    function setBoundType ( i, bound_type )
     {
-	var new_bound_type = getElementValue('bound_type_' + i);
+	var new_bound_type = bound_type || getElementValue('bound_type_' + i);
 	var age_element = myGetElement('bound_age_' + i);
-	var base_element = document.getElementById('base_bound_' + i);
-	var range_element = document.getElementById('range_bound_' + i);
+	var err_element = myGetElement('bound_age_err_' + i);
+	var reftd_element = myGetElement('bound_reftd_' + i);
+	
+	bounds_edit.values[i].btp = new_bound_type;
+	
+	if ( bound_type )
+	    setElementValue('bound_type_' + i, bound_type);
+	
+	// var base_element = document.getElementById('base_bound_' + i);
+	// var range_element = document.getElementById('range_bound_' + i);
 	
 	if ( new_bound_type == 'absolute' || new_bound_type == 'spike' )
 	{
 	    age_element.disabled = 0;
-	    if ( base_element ) base_element.style.display = 'none';
-	    if ( range_element ) range_element.style.display = 'none';
+	    err_element.disabled = 0;
+	    reftd_element.innerHTML = '';
 	}
+	
 	else
 	{
 	    age_element.disabled = 1;
-	    if ( base_element ) base_element.style.display = '';
-	    if ( new_bound_type == 'percent' && range_element ) range_element.style.display = '';
+	    err_element.disabled = 1;
+	    reftd_element.innerHTML = boundsBaseContent(i, bounds_edit.values[i]);
+	    
+	    // if ( base_element ) base_element.style.display = '';
+	    // if ( new_bound_type == 'percent' && range_element ) range_element.style.display = '';
 	}
     }
     
     this.setBoundType = setBoundType;
+    
+    function setBoundBase ( i, selector, bound_id )
+    {
+	if ( selector == 'base' )
+	    bounds_edit.values[i].bid = bound_id;
+	
+	else if ( selector == 'range' || selector == 'top' )
+	    bounds_edit.values[i].tid = bound_id;
+	
+	else
+	{
+	    console.log("ERROR: bad selector'" + selector + "'");
+	    return;
+	}
+	
+	var reftd_element = myGetElement('bound_reftd_' + i);
+	reftd_element.innerHTML = boundsBaseContent(i, bounds_edit.values[i]);
+    }
+    
+    this.setBoundBase = setBoundBase;
+    
+    function setBoundHilight ( i, selector )
+    {
+	$('#bound_row_'+i).removeClass('tsed_model_match tsed_model_close tsed_model_computed');
 
+	if ( selector == 'match' || selector == 'close' || selector == 'computed' )
+	    $('#bound_row_'+i).addClass('tsed_model_'+selector);
+    }
+    
+    this.setBoundHilight = setBoundHilight;
+    
     function callbackBaseBounds ( records )
     {
 	if ( ! records || ! records.length )
@@ -714,6 +990,7 @@ function TimescaleEditorApp ( data_url, is_contributor )
 	$(document.ts_attrs_form.save).removeClass('tsed_active_save');
 	
 	setElementValue('ts_name', record.nam || '');
+	setElementValue('ts_id', record.oid || '');
 	setElementValue('ts_min_age', record.lag != undefined ? record.lag : '');
 	setElementValue('ts_max_age', record.eag != undefined ? record.eag : '');
 	setElementValue('ts_extent', record.ext || '');
@@ -805,8 +1082,11 @@ function TimescaleEditorApp ( data_url, is_contributor )
     {
 	bound_selector_callback = callback;
 	bound_selector_box.style.display = "block";
-
-	highlightBaseTimescale(initial_timescale_id);
+	
+	base_timescale_id = initial_timescale_id;
+	base_bound_id = initial_bound_id;
+	
+	selectBaseTimescale(initial_timescale_id);
     }
     
     function closeBoundSelector ( )
@@ -819,11 +1099,9 @@ function TimescaleEditorApp ( data_url, is_contributor )
 
     function selectBaseTimescale ( timescale_id )
     {
-	base_timescale_id = timescale_id;
-	
 	highlightBaseTimescale(timescale_id);
 	
-	displayBaseBoundsList(base_bounds_box, base_timescale_id);
+	displayBaseBoundsList(base_bounds_box, timescale_id);
     }
 
     this.selectBaseTimescale = selectBaseTimescale;
@@ -872,17 +1150,236 @@ function TimescaleEditorApp ( data_url, is_contributor )
 
     function generateBaseBoundsRow ( i, record )
     {
-	var content = '<tr><td onclick="tsapp.selectBaseBound(' + i + ')">';
+	var class_str = record.oid == base_bound_id ? 'tsed_highlight' : '';
+	var content = '<tr><td class="' + class_str + '" onclick="tsapp.pickBaseBound(' + i + ')">';
 	
 	var age = record.age != undefined ? record.age : '(undefined)';
-	if ( record.ger != undefined ) age += '&nbsp;&plusm;' + record.ger;
-	
+	if ( record.ger != undefined ) age += '&nbsp;&plusmn;&nbsp;' + record.ger;
+
+	var interval = record.inm || 'Top';
 	var type = record.btp || '(undefined)';
 	
-	content += '<span class="tsed_control">' + age + '&nbsp;-&nbsp;' + type + '</span>';
+	content += '<span class="tsed_control">' + interval + '<br/>&nbsp;&nbsp;&nbsp;' + age + '&nbsp;-&nbsp;' + type + '</span>';
 	content += "</td></tr>\n";
 
 	return content;
     }
+
+    function pickBaseBound ( i )
+    {
+	alert("selected bound " + i);
+    }
+
+    this.pickBaseBound = pickBaseBound;
+    
+    // The following code is used for modeling a set of absolute bounds based on the
+    // international boundary ages with percentages. We go through all of the bounds in the
+    // current timescale and attempt to either (a) match them to international bounds, or (b)
+    // express them as a percentage of the difference between two international bounds.
+    
+    function modelBoundsForm ( event )
+    {
+	// Do nothing unless we actually have a timescale loaded into the bounds form.
+	
+	if ( ! bounds_edit.n_bounds ) return;
+
+	// If the shift key was held down while invoking this function, ask for parameters and
+	// store them in the appropriate variables for this and subsequent runs.
+	
+	if ( event.shiftKey == 1 )
+	{
+	    var ma_answer = window.prompt("Age difference threshold in Ma?", model_match_diff);
+	    model_match_diff = Number(ma_answer);
+
+	    var frac_answer = window.prompt("Age difference threshold as a fraction?", model_match_frac);
+	    model_match_frac = Number(frac_answer);
+	}
+	
+	// Go through the bounds and match as many as possible to international boundary ages.
+	
+	for ( var i=0; i < bounds_edit.n_bounds; i++ )
+	{
+	    var btp = bounds_edit.values[i].btp;
+	    var age = Number(getElementValue('bound_age_' + i));
+	    var last_diff;
+	    
+	    // Store the initial ages of all the bounds, if they have not already been stored by a
+	    // prior execution of this function.
+	    
+	    if ( bounds_edit.values[i].orig_age == undefined )
+	    {
+		bounds_edit.values[i].orig_age = age;
+	    }
+	    
+	    // Any bound that was changed by the user to type 'percent' will be set in the next
+	    // loop below.
+	    
+	    if ( btp == 'percent' && bounds_edit.values[i].modeled_type != 'percent' )
+	    {
+		// Do nothing in this loop.
+	    }
+	    
+	    // Any bound that is not already matched to a boundary from one of the international
+	    // timescales should be examined to see if it matches according to the parameters
+	    // for this run. But skip any bound with an age of 0.
+	    
+	    else if ( btp != 'same' && age != 0 )
+	    {
+		// Scan through the list of international ages to see if one of them comes close
+		// enough for a match.
+		
+		// There are two match parameters, and a candidate age must fall within both of them:
+		// - model_match_diff specifies a maximum allowable difference in Ma, defaulting
+		//   to 0.2
+		// - model_match_frac specifies a maximum difference as a fraction of the age,
+		//   defaulting to 0.05. This prevents bad matches among recent ages.
+		
+		for ( var j in api_data.ics_ages )
+		{
+		    var a = Number(api_data.ics_ages[j]);
+		    var r = api_data.ics_best[api_data.ics_ages[j]];
+		    
+		    var diff = Math.abs(age-a);
+		    
+		    // If an age matches exactly, set it to point to the corresponding international
+		    // bound record and we are done.
+		    
+		    if ( a == age )
+		    {
+			delete bounds_edit.values[i].age_diff;
+			bounds_edit.values[i].modeled_type = 'same';
+			setBoundType(i, 'same');
+			setBoundBase(i, 'base', r.oid);
+			setBoundHilight(i, 'match');
+			break;
+		    }
+		    
+		    // If an age matches approximately, within the parameters being sued for this run,
+		    // then likewise set it to point to the corresponding international bound
+		    // record. But continue to scan, for we may get a better match with a
+		    // subsequent age.
+		    
+		    else if ( diff < model_match_diff && diff < model_match_frac * age )
+		    {
+			if ( ! last_diff || diff < last_diff )
+			{
+			    bounds_edit.values[i].age_diff = age - a;
+			    bounds_edit.values[i].modeled_type = 'same';
+			    setBoundType(i, 'same');
+			    setBoundBase(i, 'base', r.oid);
+			    setBoundHilight(i, 'close');
+			}
+		    }
+		    
+		    // If we have passed beyond a possible match, we can stop.
+		    
+		    else if ( a > age + model_match_diff )
+		    {
+			break;
+		    }
+		}
+	    }
+	    
+	    // If this boundary was matched to an international age on a previous run, and the new
+	    // bounds have not yet been saved, then check to make sure it still matches under the
+	    // current parameters. If it no longer does, then return it to a 'percent'
+	    // boundary. The offset value will be adjsted and the table cell updated in the loop
+	    // below.
+	    
+	    else if ( btp == 'same' && bounds_edit.values[i].age_diff )
+	    {
+		var diff = bounds_edit.values[i].age_diff;
+		
+		if ( diff > model_match_diff || diff > model_match_frac * age )
+		{
+		    bounds_edit.values[i].btp = 'percent';
+		}
+	    }
+	}
+	
+	// Now go through the bounds again. For any 'absolute' or 'percent' bounds, record which
+	// is the nearest internationally anchored bound in this timescale, both above and
+	// below. These will then be used as the base and range for this bound when it is
+	// converted to percent.
+	
+	var top_anchor;
+	var bottom_anchor;
+	
+	for ( var i=0; i < bounds_edit.n_bounds; i++ )
+	{
+	    var btp = bounds_edit.values[i].btp;
+	    var mtp = bounds_edit.values[i].modeled_type;
+	    var age = bounds_edit.values[i].orig_age;
+	    
+	    // $$$
+	    
+	    if ( btp == 'same' || age == 0 || btp == 'absolute' && mtp && mtp != 'absolute' )
+	    {
+		top_anchor = i;
+	    }
+	    
+	    else
+	    {
+		bounds_edit.values[i].top_anchor = top_anchor;
+	    }
+	}
+	
+	for ( var i=bounds_edit.n_bounds - 1; i > 0; i-- )
+	{
+	    var btp = bounds_edit.values[i].btp;
+	    var mtp = bounds_edit.values[i].modeled_type;
+	    
+	    if ( btp == 'same' || btp == 'absolute' && mtp && mtp != 'absolute' )
+	    {
+		bottom_anchor = i;
+	    }
+	    
+	    else if ( top_anchor != undefined && bottom_anchor != undefined )
+	    {
+		bounds_edit.values[i].bottom_anchor = bottom_anchor;
+		
+		var this_top = bounds_edit.values[i].top_anchor;
+		var this_bottom = bounds_edit.values[i].bottom_anchor;
+		var this_age = bounds_edit.values[i].orig_age;
+		var top_age = bounds_edit.values[this_top].orig_age;
+		var bottom_age = bounds_edit.values[this_bottom].orig_age;
+		var top_oid = bounds_edit.values[this_top].bid;
+		var bottom_oid = bounds_edit.values[this_bottom].bid;
+		
+		var percent = 100 * (bottom_age - this_age) / (bottom_age - top_age);
+		percent = Math.round(percent * 10) / 10;
+		
+		setBoundBase(i, 'base', bottom_oid);
+		setBoundBase(i, 'top', top_oid);
+		setBoundType(i, 'percent');
+		setElementValue('bound_percent_' + i, percent);
+		bounds_edit.values[i].pct_value = percent;
+		setBoundHilight(i, 'computed');
+	    }
+	}
+    }
+    
+    this.modelBoundsForm = modelBoundsForm;
+    
+    // function printBounds ( )
+    // {
+    // 	for ( var i in api_data.ics_ages )
+    // 	{
+    // 	    var age = api_data.ics_ages[i];
+	    
+    // 	    if ( ! api_data.ics_best[age] )
+    // 	    {
+    // 		console.log(age + ': none');
+    // 		continue;
+    // 	    }
+	    
+    // 	    var name = api_data.ics_best[age].inm;
+    // 	    var scale = api_data.ics_best[age].scale_no;
+	    
+    // 	    console.log(age + ': ' + name + ' (' + scale + ')');
+    // 	}	
+    // }
+    
+    // this.printBounds = printBounds;
 }
 

@@ -5,8 +5,29 @@
     background-color: lightblue;
 }
 
+.tsed_error {
+    background-color: red;
+}
+
 .tsed_active_save {
+    background-color: gold;
+}
+
+.tsed_model_match {
     background-color: lightgreen;
+}
+
+.tsed_model_close {
+    background-color: lightyellow;
+}
+
+.tsed_model_computed {
+    background-color: plum;
+}
+
+.tsed_diff {
+    color: red;
+    font-size: 0.8em;
 }
 
 .tsed_timescale_label {
