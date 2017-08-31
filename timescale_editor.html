@@ -5,6 +5,7 @@
 <!-- Author: Michael McClennen -->
 
 <link rel="stylesheet" type="text/css" href="%%app_resources%%/timescale_editor.css">
+<link rel="stylesheet" type="text/css" href="%%common_resources%%/pbdb_webapp.css">
 <script src="%%common_resources%%/jquery-2.0.3.min.js" language="JavaScript" type="text/javascript"></script>
 <script src="%%common_resources%%/underscore-1.8.3.min.js" language="JavaScript" type="text/javascript"></script>
 <script src="%%common_resources%%/pbdb_webapp.js" language="JavaScript" type="text/javascript"></script>
@@ -61,8 +62,8 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
       </td>
       <td id="ts_attrs_pane" style="vertical-align: top; display: none">
 	<form id="ts_attrs_form" name="ts_attrs_form">
-	  <input type="button" name="save" value="Save changes" onclick="tsapp.saveTimescaleAttrs()">
-	  <input type="reset" name="reset" value="Reset"><br><br>
+	  <input type="button" class="btn" name="save" value="Save changes" onclick="tsapp.saveTimescaleAttrs()">
+	  <input type="reset" class="btn" name="reset" value="Reset"><br><br>
 	  <table id="ts_attrs_box border="0" cellpadding="3" style="margin-top: 20px;">
 	    <tr><td>Timescale name:</td>
 	        <td><input id="ts_name" type="text" size="40" onchange="tsapp.checkTimescaleAttrs()"/>
@@ -86,9 +87,9 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
 	</form></td>
       <td id="bounds_pane" style="vertical-align: top; height: 500px; display: none">
 	<form id="bounds_form" name="bounds_form">
-	  <input type="button" name="save" value="Save changes" onclick="tsapp.saveBoundsForm()">
-	  <input type="reset" name="reset" value="Reset">
-	  <input type="button" name="model" value="Model" onclick="tsapp.modelBoundsForm(event)"
+	  <input type="button" class="btn" name="save" value="Save changes" onclick="tsapp.saveBoundsForm()">
+	  <input type="reset" class="btn" name="reset" value="Reset">
+	  <input type="button" class="btn" name="model" value="Compare to ICS stages" onclick="tsapp.modelBoundsForm(event)"
 		 style="margin-left: 50px">
 	
 	  <div style="max-height: 500px; overflow: auto">
