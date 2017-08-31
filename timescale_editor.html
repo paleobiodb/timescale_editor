@@ -54,11 +54,12 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
 	  <span id="edit_bounds" onclick="tsapp.selectPane('bounds_pane', 'edit_bounds')">Bounds</span></p>
       </td></tr>
     <tr>
-      <td style="vertical-align: top; height: 500px">
-	<table id="timescales_box" border="1">
-	</table>
+      <td style="vertical-align: top">
+	<div style="max-height: 500px; overflow: auto">
+	  <table id="timescales_box" border="1">
+	  </table></div>
       </td>
-      <td id="ts_attrs_pane" style="vertical-align: top; height: 500px; display: none">
+      <td id="ts_attrs_pane" style="vertical-align: top; display: none">
 	<form id="ts_attrs_form" name="ts_attrs_form">
 	  <input type="button" name="save" value="Save changes" onclick="tsapp.saveTimescaleAttrs()">
 	  <input type="reset" name="reset" value="Reset"><br><br>
@@ -89,8 +90,10 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
 	  <input type="reset" name="reset" value="Reset">
 	  <input type="button" name="model" value="Model" onclick="tsapp.modelBoundsForm(event)"
 		 style="margin-left: 50px">
-	  <table id="bounds_box" border="1" style="margin-top: 20px;">
-	  </table>
+	
+	  <div style="max-height: 500px; overflow: auto">
+	    <table id="bounds_box" border="1" style="margin-top: 20px;">
+	    </table></div>
         </form>
       </td></tr>
   </table>

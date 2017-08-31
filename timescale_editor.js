@@ -94,8 +94,8 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
  	
 	// initialize some form elements
 	
-	form_elt.btps = [ 'absolute', 'spike', 'same', 'percent', 'offset' ];
-	form_elt.btpnames = [ 'Absolute', 'Spike', 'Same as', 'Percent', 'Offset' ];
+	form_elt.btps = [ 'absolute', 'spike', 'same', 'percent', 'alternate' ];
+	form_elt.btpnames = [ 'Absolute', 'Spike', 'Same as', 'Percent', 'Alternate' ];
 	
 	// Initialize some of the interface elements.
 	
@@ -384,6 +384,8 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	}
 	
 	internationals.sort( function(a, b) { return a.tno - b.tno } );
+	others.sort( function(a, b) { return a.nam && b.nam ? a.nam.localeCompare(b.nam)
+					   : a.nam ? a.nam : b.nam; } );
 	
 	var content = "";
 	
@@ -558,7 +560,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     
     function generateBoundsFormRow( i, record, prev_interval )
     {
-	var content = '<tr id="bound_row_' + i + '"><td>';
+	var content = '<tr class="tsed_bounds_row" id="bound_row_' + i + '"><td>';
 	
 	if ( i > 0 ) content += intervalInput(i, record);
 	content += oidField(i, record);
@@ -582,7 +584,8 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 
     function intervalInput ( i, record )
     {
-	var content = '<input type="text" class="tsed_control" id="bound_int_' + i + '" value="' + record.inm + "\"/><br>\n";
+	var name = (record.iid == undefined) ? '  --' : record.inm;
+	var content = '<input type="text" class="tsed_control" id="bound_int_' + i + '" value="' + name + "\"/><br>\n";
 	return content;
     }
     
@@ -606,13 +609,23 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	var content = '&nbsp;<select class="tsed_control" id="bound_type_' + i + 
 	    '" onchange="tsapp.setBoundType(' + i + ')">\n';
 	
+	var found;
+	
 	for ( var j=0; j<form_elt.btps.length; j++ )
 	{
 	    var value = form_elt.btps[j];
-	    var selected = ''; if ( value == record.btp ) selected = ' selected';
+	    var selected = '';
+	    
+	    if (value == record.btp)
+	    {
+		selected = ' selected';
+		found = 1;
+	    }
 	    
 	    content += '<option value="' + value + '"' + selected + ">" + form_elt.btpnames[j] + "</option>\n";
 	}
+	
+	if ( ! found ) content += '<option value ="' + record.btp + '" selected>' + record.btp + "</option>\n";
 	
 	content += "</select>\n";
 	
@@ -634,7 +647,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	var start_tag = '<span id="base_bound_' + i + '" class="tsed_timescale_label" ' +
 	    'onclick="tsapp.selectBaseBound(\'base\',' + i + ')">';
 	
-	if ( record.btp == "same" || record.btp == "offset" )
+	if ( record.btp == "same" )
 	{
 	    var base_record = api_data.bounds_id[record.bid];
 	    var base_label = 'unknown';
@@ -648,7 +661,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 		if ( base_record.age == "0" )
 		    base_label = 'Present';
 		
-	    	if ( base_record.sid > 5 )
+	    	if ( base_record.sid > 5 && base_record.sid != record.sid )
 		{
 		    var base_tsrecord = api_data.timescales_id[base_record.sid];
 		    base_label += ' [' + base_tsrecord.nam + ']';
@@ -664,23 +677,14 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 			spike_elt.src = resource_url + '/nospike.png';
 		}
 	    }
-	    
- 	    if ( record.btp == "offset" )
-	    {
-		var offset = record.ofs != undefined ? record.ofs : '';
-		var ofsfield = '<input class="tsed_control" id="bound_offset_' + i + 
-		    '" type="text" size="6" value="' + offset + '"> from ';
-		
-		if ( base_age != '' ) label += ' (' + base_age + ')';
-		
-		content = ofsfield + start_tag + base_label + '</span>';
-	    }
-	    
+
 	    else
 	    {
-		content = start_tag + base_label + '</span>';
+		content = 'choose a boundary';
 	    }
-
+	    
+ 	    content = start_tag + base_label + '</span>';
+	    
 	    if ( record.age_diff )
 	    {
 		var rounded = Math.round(record.age_diff * 1000) / 1000;
@@ -697,25 +701,30 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    var base_age = '';
 	    var top_age = '';
 	    
+	    var percent = record.ofs != undefined ? record.ofs : '';
+	    var pctfield = '<input class="tsed_control" id="bound_percent_' + i + 
+		'" type="text" size="6" value="' + percent + '"> of ';
+	    
 	    if ( base_record && top_record )
 	    {
 		base_label = base_record.inm || 'unknown';
-		top_label = top_record.inm || 'unknown';
+		top_label = top_record.inm || top_record.age || 'unknown';
 		
-	    	if ( base_record.sid > 5 || top_record.sid > 5 )
+	    	if ( (base_record.sid > 5 && base_record.sid != record.sid) ||
+		     (top_record.sid > 5 && top_record.sid != record.sid) )
 		{
 		    var base_tsrecord = api_data.timescales_id[base_record.sid];
 		    var top_tsrecord = api_data.timescales_id[top_record.sid];
 		    
 		    if ( base_record.sid == top_record.sid )
 		    {
-			top_label += ' / ' + base_tsrecord.nam;
+			top_label += ' [' + base_tsrecord.nam + ']';
 		    }
 		    
 		    else
 		    {
-			base_label += ' / ' + base_tsrecord.nam;
-			top_label += ' / ' + top_tsrecord.nam;
+			base_label += ' [' + base_tsrecord.nam + ']';
+			top_label += ' [' + top_tsrecord.nam + ']';
 		    }
 		}
 		
@@ -723,13 +732,103 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 		    base_label += ' (' + base_record.age + ')';
 		if ( top_record.age != undefined )
 		    top_label += ' (' + top_record.age + ')';
+		
+		content = pctfield + start_tag + base_label + ' - ' + top_label + '</span>';
+	    }
+
+	    else if ( base_record )
+	    {
+		base_label = base_record.inm || 'unknown';
+
+	    	if ( base_record.sid > 5 && base_record.sid != record.sid )
+		{
+		    var base_tsrecord = api_data.timescales_id[base_record.sid];
+		    base_label += ' [' + base_tsrecord.nam + ']';
+		}
+
+		content = start_tag + base_label + '</span>';
+	    }
+
+	    else
+	    {
+		content = start_tag + 'choose a boundary</span>';
+	    }
+	}
+	
+	else if ( record.btp == "alternate" )
+	{
+	    var base_record = api_data.bounds_id[record.bid];
+	    var top_record = api_data.bounds_id[record.tid];
+	    var base_label = 'unknown';
+	    var top_label = 'unknown';
+	    
+	    if ( base_record && top_record )
+	    {
+		base_label = base_record.inm || 'unknown';
+		top_label = top_record.inm || top_record.age || 'unknown';
+		
+	    	if ( (base_record.sid > 5 && base_record.sid != record.sid) ||
+		     (top_record.sid > 5 && top_record.sid != record.sid) )
+		{
+		    var base_tsrecord = api_data.timescales_id[base_record.sid];
+		    var top_tsrecord = api_data.timescales_id[top_record.sid];
+		    
+		    if ( base_record.sid == top_record.sid )
+		    {
+			top_label += ' [' + base_tsrecord.nam + ']';
+		    }
+		    
+		    else
+		    {
+			base_label += ' [' + base_tsrecord.nam + ']';
+			top_label += ' [' + top_tsrecord.nam + ']';
+		    }
+		}
+		
+		content = start_tag + base_label + ' - ' + top_label + '</span>';
 	    }
 	    
-	    var percent = record.ofs != undefined ? record.ofs : '';
-	    var pctfield = '<input class="tsed_control" id="bound_percent_' + i + 
-		'" type="text" size="6" value="' + percent + '"> of ';
+	    else if ( base_record )
+	    {
+		base_label = base_record.inm || 'unknown';
+
+	    	if ( base_record.sid > 5 && base_record.sid != record.sid )
+		{
+		    var base_tsrecord = api_data.timescales_id[base_record.sid];
+		    base_label += ' [' + base_tsrecord.nam + ']';
+		}
+
+		content = start_tag + base_label + '</span>';
+	    }
+
+	    else if ( top_record )
+	    {
+		base_label = 'here';
+		top_label = top_record.inm || top_record.age || 'unknown';
+		
+	    	if ( top_record.sid > 5 && top_record.sid != record.sid )
+		{
+		    var top_tsrecord = api_data.timescales_id[top_record.sid];
+		    top_label += ' [' + top_tsrecord.nam + ']';
+		}
+		
+		content = start_tag + 'this age' + ' - ' + top_label + '</span>';
+	    }
+
+	    else if ( record.iid == undefined )
+	    {
+		content = start_tag + 'this age</span>';
+	    }
 	    
-	    content = pctfield + start_tag + base_label + ' - ' + top_label + '</span>';
+	    else
+	    {
+		content = start_tag + 'choose a boundary</span>';
+	    }
+	}
+	
+	else if ( record.age == 0 )
+	{
+	    return '<span class="tsed_timescale_label">Present</span>';
 	}
 	
 	return content;
