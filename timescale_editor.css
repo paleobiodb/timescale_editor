@@ -2,31 +2,31 @@
 /* CSS definitions for timescale editor form */
 
 .tsed_highlight {
-    background-color: lightblue;
+    background-color: #47C7EA;
 }
 
 .tsed_error {
-    background-color: red;
+    background-color: #FF7F59;
 }
 
 .tsed_active_save {
-    background-color: gold;
+    background-color: #47C7EA;
 }
 
 .tsed_model_match {
-    background-color: lightgreen;
+    background-color: #9DC2A6;
 }
 
 .tsed_model_close {
-    background-color: lightyellow;
+    background-color: #FAF6A0;
 }
 
 .tsed_model_computed {
-    background-color: plum;
+    background-color: #aaa;
 }
 
 .tsed_diff {
-    color: red;
+    color: #AD2800;
     font-size: 0.8em;
 }
 
@@ -79,4 +79,28 @@
     cursor: pointer;
 }
 
+#ts_list {
+    height: 500px;
+    vertical-align: top;
+}
 
+#ts_list>div {
+    max-height: 100%;
+    overflow: auto;
+}
+
+#timescales_box {
+    border:hidden;
+}
+
+#timescales_box>tbody>tr {
+    border:1px black;
+}
+
+#ts_attrs_box,#bounds_box {
+    margin: 20px auto;
+}
+
+.btn-holder {
+    margin:1em 2em;
+}

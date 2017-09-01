@@ -47,24 +47,28 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
   <table border="1">
     <tr>
       <td id="timescales_pane" width="30%">
-	<p align="center">Timescales</p>
+		<p align="center">Timescales</p>
       </td>
       <td id="edit_selector" width="70%">
-	<p align="center">
-	  <span id="edit_attrs" onclick="tsapp.selectPane('ts_attrs_pane', 'edit_attrs')">Timescale attributes</span> &nbsp;
-	  <span id="edit_bounds" onclick="tsapp.selectPane('bounds_pane', 'edit_bounds')">Bounds</span></p>
-      </td></tr>
+		<p align="center">
+		<span id="edit_attrs" onclick="tsapp.selectPane('ts_attrs_pane', 'edit_attrs')">Timescale attributes</span> &nbsp;
+		<span id="edit_bounds" onclick="tsapp.selectPane('bounds_pane', 'edit_bounds')">Bounds</span></p>
+      </td>
+    </tr>
     <tr>
-      <td style="vertical-align: top">
-	<div style="max-height: 500px; overflow: auto">
-	  <table id="timescales_box" border="1">
-	  </table></div>
+      <td id="ts_list" style="vertical-align: top; height:500px;">
+		<div style="max-height: 100%; overflow: auto;">
+			<table id="timescales_box" border="1">
+			</table>
+		</div>
       </td>
       <td id="ts_attrs_pane" style="vertical-align: top; display: none">
 	<form id="ts_attrs_form" name="ts_attrs_form">
-	  <input type="button" class="btn" name="save" value="Save changes" onclick="tsapp.saveTimescaleAttrs()">
-	  <input type="reset" class="btn" name="reset" value="Reset"><br><br>
-	  <table id="ts_attrs_box border="0" cellpadding="3" style="margin-top: 20px;">
+		<div class="btn-holder">
+		  <input type="button" class="btn" name="save" value="Save changes" onclick="tsapp.saveTimescaleAttrs()">
+		  <input type="reset" class="btn btn-secondary" name="reset" value="Reset">
+	  	</div>
+	  <table id="ts_attrs_box" border="0" cellpadding="3">
 	    <tr><td>Timescale name:</td>
 	        <td><input id="ts_name" type="text" size="40" onchange="tsapp.checkTimescaleAttrs()"/>
 		</td></tr>
@@ -87,11 +91,12 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
 	</form></td>
       <td id="bounds_pane" style="vertical-align: top; height: 500px; display: none">
 	<form id="bounds_form" name="bounds_form">
-	  <input type="button" class="btn" name="save" value="Save changes" onclick="tsapp.saveBoundsForm()">
-	  <input type="reset" class="btn" name="reset" value="Reset">
-	  <input type="button" class="btn" name="model" value="Compare to ICS stages" onclick="tsapp.modelBoundsForm(event)"
-		 style="margin-left: 50px">
-	
+		<div class="btn-holder">
+		  <input type="button" class="btn" name="save" value="Save changes" onclick="tsapp.saveBoundsForm()">
+		  <input type="reset" class="btn" name="reset" value="Reset">
+		  <input type="button" class="btn" name="model" value="Compare to ICS stages" onclick="tsapp.modelBoundsForm(event)" style="float:right;">
+			 style="margin-left: 50px">
+		</div>
 	  <div style="max-height: 500px; overflow: auto">
 	    <table id="bounds_box" border="1" style="margin-top: 20px;">
 	    </table></div>
