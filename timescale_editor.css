@@ -79,7 +79,11 @@
     cursor: pointer;
 }
 
-#ts_list {
+#editor {
+    margin:2em 1em 0em 1em;
+}
+
+#ts_list,#bounds_pane {
     height: 500px;
     vertical-align: top;
 }
@@ -98,9 +102,15 @@
 }
 
 #ts_attrs_box,#bounds_box {
-    margin: 20px auto;
+    margin: 0 auto;
 }
 
+#bounds_box_header {
+    width:100%;
+}
+#bounds_form {
+    margin: 0 0 0 1em;
+}
 .btn-holder {
-    margin:1em 2em;
+    margin:2em 2em;
 }

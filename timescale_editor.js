@@ -325,11 +325,11 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	if ( button_no )
 	{
 	    var hilight_button = document.getElementById(button_id);
-	    if ( hilight_button ) hilight_button.style['background-color'] = 'lightgrey';
+	    if ( hilight_button ) hilight_button.addClass('tsed_highlight');
 	    
 	    var buttons = otherElements(button_id);
 	    for ( var i=0; i<buttons.length; i++ )
-		buttons[i].style['background-color'] = '';
+		buttons[i].removeClass("tsed_highlight");
 	}
     }
     

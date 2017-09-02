@@ -42,17 +42,17 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
   
 </div>
 
-<div name="editor" style="margin-left: 1em; margin-right: 1em;">
-  
+<div name="editor" id="editor">
   <table border="1">
     <tr>
       <td id="timescales_pane" width="30%">
-		<p align="center">Timescales</p>
+		<div align="center" class="col-sm-12">Timescales</div>
       </td>
       <td id="edit_selector" width="70%">
-		<p align="center">
-		<span id="edit_attrs" onclick="tsapp.selectPane('ts_attrs_pane', 'edit_attrs')">Timescale attributes</span> &nbsp;
-		<span id="edit_bounds" onclick="tsapp.selectPane('bounds_pane', 'edit_bounds')">Bounds</span></p>
+      	<div align="center">
+  			<div align="center" class="col-sm-6" id="edit_attrs" onclick="tsapp.selectPane('ts_attrs_pane', 'edit_attrs')">Timescale attributes</div>
+			<div align="center" class="col-sm-6" id="edit_bounds" onclick="tsapp.selectPane('bounds_pane', 'edit_bounds')">Bounds</div>
+		</div>
       </td>
     </tr>
     <tr>
@@ -97,6 +97,10 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
 		  <input type="button" class="btn" name="model" value="Compare to ICS stages" onclick="tsapp.modelBoundsForm(event)" style="float:right;">
 			 style="margin-left: 50px">
 		</div>
+		<table id="bounds_box_header"><tbody><tr>
+			<td>Interval constraints</td>
+			<td>ICS comparison</td>
+		</tr></tbody></table>
 	  <div style="max-height: 500px; overflow: auto">
 	    <table id="bounds_box" border="1" style="margin-top: 20px;">
 	    </table></div>
