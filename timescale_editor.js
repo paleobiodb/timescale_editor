@@ -560,7 +560,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     
     function generateBoundsFormRow( i, record, prev_interval )
     {
-	var content = '<tr class="tsed_bounds_row" id="bound_row_' + i + '"><td>';
+	var content = '<tr class="tsed_bounds_row" id="bound_row_' + i + '"><td class="bound_cell">';
 	
 	if ( i > 0 ) content += intervalInput(i, record);
 	content += oidField(i, record);
@@ -632,7 +632,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	var src = '/nospike.png';
 	if ( record.spk ) src = '/spike.png';
 	
-	content += '<img id="bound_spike_' + i + '" width="20" height="20" src="' + resource_url + src + '">' + "\n";
+	content += '<img class="spike" id="bound_spike_' + i + '" width="20" height="20" src="' + resource_url + src + '">' + "\n";
 	
 	return content;
     }
@@ -688,7 +688,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    if ( record.age_diff )
 	    {
 		var rounded = Math.round(record.age_diff * 1000) / 1000;
-		content += '<span class="tsed_diff"> (' + rounded + ')</span>';
+		content += '<span class="tsed_diff"> (' + rounded > 0 ? "+" : "" + rounded + ')</span>';
 	    }
 	}
 	
@@ -703,7 +703,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    
 	    var percent = record.ofs != undefined ? record.ofs : '';
 	    var pctfield = '<input class="tsed_control" id="bound_percent_' + i + 
-		'" type="text" size="6" value="' + percent + '"> of ';
+		'" type="text" size="6" value="' + percent + '">% of ';
 	    
 	    if ( base_record && top_record )
 	    {
