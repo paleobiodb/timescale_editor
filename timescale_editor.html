@@ -42,6 +42,14 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
   
 </div>
 
+<!-- This box is visible when the application is first opened, and disappears once the -->
+<!-- initialization steps are complete.  If it remains visible, something has gone wrong with the -->
+<!-- initialization. -->
+
+<div id="db_initmsg" class="dlMessageBox" style="width: 300px; height: 100px;">
+	<span id="initmsg" class="large">Initializing form, please wait...</span>
+</div>
+
 <div name="editor" id="editor">
   <table border="1">
     <tr>
@@ -99,7 +107,7 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
 		</div>
 		<table id="bounds_box_header"><tbody><tr>
 			<td>Interval constraints</td>
-			<td>ICS comparison</td>
+			<td style="text-align: right;">ICS comparison</td>
 		</tr></tbody></table>
 	  <div style="max-height: 500px; overflow: auto">
 	    <table id="bounds_box" border="1" style="margin-top: 20px;">
@@ -130,13 +138,7 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
 </div>
 
 
-<!-- This box is visible when the application is first opened, and disappears once the -->
-<!-- initialization steps are complete.  If it remains visible, something has gone wrong with the -->
-<!-- initialization. -->
 
-<div id="db_initmsg" class="dlMessageBox" style="width: 300px; height: 100px;">
-<span id="initmsg" class="large">Initializing form, please wait...</span>
-</div>
 
 
 

@@ -103,16 +103,15 @@
 }
 
 #ts_attrs_box,#bounds_box {
-    margin: 0 auto;
+    margin: 1em;
+    width: 95%;
 }
 
-#bounds_box {
-    font-size: 0.8em;
-}
 #bounds_box_header {
-    width:99%;
-    font-size: 0.8em;
+    margin: 1em 1em 0 2em;
+    width:83%;
     font-weight: 800;
+    font-size: 0.8em;
 }
 #bounds_form {
     margin: 0 0 0 1em;
@@ -126,4 +125,8 @@ td.bound_cell {
 .spike {
     position: absolute;
 }
-.tsed_control
+.dlMessageBox {
+    width: 30em;
+    margin: 2em;
+    text-align: center;
+}

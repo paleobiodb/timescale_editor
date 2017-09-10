@@ -268,7 +268,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     
     function badInit ( )
     {
-	if ( init_box ) init_box.innerHTML = "Initialization failed!  Please contact admin@paleobiodb.org";
+	if ( init_box ) init_box.innerHTML = "<span>Initialization failed!<br>Please contact admin@paleobiodb.org</span>";
     }
     
     // This function is called when the configuration API calls are complete.  It hides the
