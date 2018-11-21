@@ -29,6 +29,18 @@
     color: #AD2800;
 }
 
+.tsed_top_label {
+    color: #AD2800;
+    padding: 3px;
+    border: 1px solid #AD2800;
+}
+
+
+.tsed_top_ref {
+    padding: 3px;
+}
+
+
 .tsed_timescale_label {
     background-color: rgba(245,245,245,0.6);
     padding: 0.25em;

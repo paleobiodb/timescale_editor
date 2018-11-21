@@ -53,9 +53,6 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
 <div name="editor" id="editor">
   <table border="1">
     <tr>
-      <td id="timescales_pane" width="30%">
-		<div align="center" class="col-sm-12">Timescales</div>
-      </td>
       <td id="edit_selector" width="70%">
       	<div align="center">
   			<div align="center" class="col-sm-6" id="edit_attrs" onclick="tsapp.selectPane('ts_attrs_pane', 'edit_attrs')">Timescale attributes</div>
@@ -65,7 +62,7 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
     </tr>
     <tr>
       <td id="ts_list" style="vertical-align: top; height:500px;">
-		<div style="max-height: 100%; overflow: auto;">
+		<div style="max-height: 500px; overflow: auto;">
 			<table id="timescales_box" border="1">
 			</table>
 		</div>
@@ -95,6 +92,10 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
 	    <tr><td>Timescale taxon:</td>
 	        <td><input id="ts_taxon" type="text" size="40" onchange="tsapp.checkTimescaleAttrs()"/>
 	        </td></tr>
+	    <tr><td>Timescale comments:</td>
+	        <td><textarea id="ts_comments" rows=2 columns=40 onchange="tsapp.checkTimescaleAttrs()">
+		    </textarea>
+	        </td></tr>
 	</table>
 	</form></td>
       <td id="bounds_pane" style="vertical-align: top; height: 500px; display: none">
@@ -105,8 +106,8 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
 		  <input type="button" class="btn" name="model" value="Compare to ICS stages" onclick="tsapp.modelBoundsForm(event)" style="float:right;">
 		</div>
 		<table id="bounds_box_header"><tbody><tr>
-			<td>Interval constraints</td>
-			<td style="text-align: right;">ICS comparison</td>
+			<td>Interval bounds</td>
+			<td style="text-align: right;">Based on</td>
 		</tr></tbody></table>
 	  <div style="max-height: 500px; overflow: auto">
 	    <table id="bounds_box" border="1" style="margin-top: 20px;">
@@ -117,19 +118,32 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
   
 </div>
 
-<!-- The following box is a modal dialog, and only appears when timescale references are being selected. -->
+<!-- The following boxes are modal dialogs, and only appear when -->
+<!-- timescale and bound references are being selected. -->
+
+<div id="timescale_selector" class="tsed_modal">
+
+  <div class="tsed_modal_content" style="height: 500px">
+    <span class="close" onclick="tsapp.closeModal('timescale_selector')">&times;</span>
+    <h3>Select a timescale:</h3>
+    <table id="timescale_selector_timescales" style="display: block; height: 400px; overflow: scroll">
+    </table>
+  </div>
+
+</div>
+    
 
 <div id="bound_selector" class="tsed_modal">
 
-  <div class="tsed_modal_content" style="max-height: 300">
-    <span class="close" onclick="tsapp.closeBoundSelector()">&times;</span>
+  <div class="tsed_modal_content" style="height: 500px">
+    <span class="close" onclick="tsapp.closeModal('bound_selector')">&times;</span>
     <h3>Select a boundary from one of the following timescales:</h3>
-    <table width="80%" cellpadding="5">
-    <tr style="vertical-align: top"><td width="40%">
-        <table id="bound_selector_timescales" style="overflow-y: scroll">
-        </table></td>
-	<td>
-	<table id="bound_selector_bounds" style="overflow-y: scroll">
+    <table width="80%" style="height: 450px;" cellpadding="5">
+      <tr style="vertical-align: top">
+	<td width="40%">
+	  <table id="bound_selector_timescales" style="display: block; height: 400px; overflow: scroll">
+	  </table></td>
+	 <td><table id="bound_selector_bounds" style="display: block; height: 400px; overflow: scroll">
 	</table></td></tr>
     </table>
   </div>

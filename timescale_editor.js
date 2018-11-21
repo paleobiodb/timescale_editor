@@ -35,7 +35,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     var timescales_box;
     var bounds_box;
     var ts_attrs_box;
-    var base_bounds_box;
+    var bound_selector_bounds_box;
     
     var edit_timescale_id;
     var edit_timescale_attrs;
@@ -46,7 +46,9 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     var base_bound_id;
     
     var bound_selector_box;
-    var bound_selector_callback;
+
+    var modal_state = { timescale_selector: { },
+			bound_selector: { } };
     
     var international_no = { 'tsc:1': 1, 'tsc:2': 2, 'tsc:3': 3,
 			     'tsc:4': 4, 'tsc:5' : 5 };
@@ -87,15 +89,15 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	timescales_box = myGetElement("timescales_box");
 	bounds_box = myGetElement("bounds_box");
 	bound_selector_box = myGetElement("bound_selector");
-	base_bounds_box = myGetElement("bound_selector_bounds")
+	bound_selector_bounds_box = myGetElement("bound_selector_bounds")
 	
 	if ( !init_box || ! timescales_box || ! bounds_box )
 	    return badInit();
  	
 	// initialize some form elements
 	
-	form_elt.btps = [ 'absolute', 'spike', 'same', 'percent', 'alternate' ];
-	form_elt.btpnames = [ 'Absolute', 'Spike', 'Same as', 'Percent', 'Alternate' ];
+	form_elt.btps = [ 'absolute', 'spike', 'same', 'fraction' ];
+	form_elt.btpnames = [ 'absolute', 'spike', 'same as', 'fraction' ];
 	
 	// Initialize some of the interface elements.
 	
@@ -111,11 +113,11 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	// Initiate an API call to fetch necessary data.  This has a callback to handle the data
 	// that comes back, and a failure callback too.
 	
-	$.getJSON(data_url + 'timescales/list.json?all_records')
+	$.getJSON(data_url + 'timescales/list.json?all_records&show=desc')
 	    .done(callbackListTimescales)
 	    .fail(badInit);
-
-	$.getJSON(data_url + 'bounds/list.json?timescale_id=tsc:1,tsc:2,tsc:3,tsc:4,tsc:5')
+	
+	$.getJSON(data_url + 'timescales/bounds.json?timescale_id=tsc:1,tsc:2,tsc:3,tsc:4,tsc:5')
 	    .done(callbackListBounds)
 	    .fail(badInit);
     }
@@ -148,8 +150,8 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	done_config1 = 1;
 	if ( done_config2 ) finishInitApp();
 	
-	refreshTimescales("timescales_box", "tsapp.selectTimescale");
-	refreshTimescales("bound_selector_timescales", "tsapp.selectBaseTimescale");
+	refreshTimescales("timescale_selector_timescales", "timescale_selector");
+	refreshTimescales("bound_selector_timescales", "bound_selector");
     }
     
     function callbackListBounds (response)
@@ -200,16 +202,16 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 		api_data.bounds_dep[record.tid][record.oid] = 1;
 	    }
 	    
-	    if ( record.cid )
+	    if ( record.uid )
 	    {
-		if ( ! api_data.bounds_dep[record.cid] ) api_data.bounds_dep[record.cid] = { };
-		api_data.bounds_dep[record.cid][record.oid] = 1;
+		if ( ! api_data.bounds_dep[record.cid] ) api_data.bounds_dep[record.uid] = { };
+		api_data.bounds_dep[record.uid][record.oid] = 1;
 	    }
 	    
-	    if ( record.rid )
+	    if ( record.cid )
 	    {
-		if ( ! api_data.bounds_dep[record.rid] ) api_data.bounds_dep[record.rid] = { };
-		api_data.bounds_dep[record.rid][record.oid] = 1;
+		if ( ! api_data.bounds_dep[record.rid] ) api_data.bounds_dep[record.cid] = { };
+		api_data.bounds_dep[record.cid][record.oid] = 1;
 	    }
 	    
 	    // Now fill in the best record for each distinct age in the ICS timescales.
@@ -356,7 +358,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	return result;
     }
     
-    function refreshTimescales ( element_id, selector_expr )
+    function refreshTimescales ( element_id, modal_id )
     {
 	var element = myGetElement(element_id);
 	
@@ -367,6 +369,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	}
 	
 	var internationals = [ ];
+	var actives = [ ];
 	var others = [ ];
 	
 	for ( var i=0; i < api_data.timescales.length; i++ )
@@ -377,20 +380,28 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    
 	    record.tno = Number(record.oid.replace(/^tsc:/, ''));
 	    
-	    if ( record.ext && record.ext == "ics" )
+	    if ( record.tno >= 1 && record.tno <= 5 )
 		internationals.push(record);
+	    else if ( record.act )
+		actives.push(record);
 	    else
 		others.push(record);
 	}
 	
 	internationals.sort( function(a, b) { return a.tno - b.tno } );
+	actives.sort( function(a, b) { return a.nam && b.nam ? a.nam.localeCompare(b.nam)
+					   : a.nam ? a.nam : b.nam; } );
 	others.sort( function(a, b) { return a.nam && b.nam ? a.nam.localeCompare(b.nam)
 					   : a.nam ? a.nam : b.nam; } );
-	
+
+	var selector_expr = "tsapp.modalChoice('" + modal_id + "', record.oid)";
 	var content = "";
 	
 	for ( var i=0; i < internationals.length; i++ )
 	    content += generateTableLine(internationals[i], selector_expr);
+	
+	for ( var i=0; i < actives.length; i++ )
+	    content += generateTableLine(actives[i], selector_expr);
 	
 	for ( var i=0; i < others.length; i++ )
 	    content += generateTableLine(others[i], selector_expr);
@@ -398,9 +409,9 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	element.innerHTML = content;
     }
     
-    function generateTableLine ( record, selector_expr )
+    function generateTableLine ( record, onclick_expr )
     {
-	return "<tr><td title=\"" + record.oid + "\" onclick=\"" + selector_expr + "('" + record.oid + "')\">" + record.nam + "</td></tr>\n";
+	return "<tr><td title=\"" + record.oid + "\" onclick=\"" + onclick_expr + "\">" + record.nam + "</td></tr>\n";
     }
     
     function selectTimescale ( timescale_id )
@@ -436,7 +447,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 
 	else
 	{
-	    $.getJSON(data_url + 'bounds/list.json?timescale_id=' + timescale_id)
+	    $.getJSON(data_url + 'timescales/bounds.json?timescale_id=' + timescale_id)
 		.done(function ( response ) { displayBoundsListResult(display_element, timescale_id, response.records) })
 		.fail(function ( xhr ) { display_element.innerHTML = "ERROR: could not load bounds"; failSaveBounds(xhr); });
 	}
@@ -505,11 +516,20 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     
     function generateBoundsFormContent ( timescale_id, records )
     {
-	// First go through the records and save the content under 'api_data'. Also collect up a
-	// list of the identifiers of any base bounds.
+	// First go through the records and save the content under the application variable
+	// 'bounds_edit'. This is a singular variable, which means we can only be editing one set
+	// of bounds at once. In the process, determine which bounds are referenced as interval
+	// top by any bound other than the immediately following one. Also keep track of any base
+	// bounds, range bounds, and color bounds from other timescales so that we can query for
+	// them if necessary.
 	
 	bounds_edit.n_bounds = records.length;
 	bounds_edit.values = [ ];
+	bounds_edit.lookup = { };
+	bounds_edit.labels = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+	bounds_edit.next_label = 0;
+
+	bounds_edit.source_timescale_id = api_data.timescales_id[timescale_id].source_timescale_id || 1;
 	
 	var base_bounds = [ ];
 	
@@ -517,16 +537,21 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	{
 	    var oid = records[i].oid;
 	    
+	    var top_oid = records[i].uid;
 	    var base_oid = records[i].bid;
-	    var top_oid = records[i].tid;
+	    var range_oid = records[i].tid;
 	    var color_oid = records[i].cid;
 	    
-	    bounds_edit.values[i] = { oid: oid, btp: records[i].btp, ofs: records[i].ofs,
-				      bid: base_oid, tid: top_oid, cid: color_oid };
+	    bounds_edit.values[i] = { oid: oid, inm: records[i].inm, btp: records[i].btp,
+				      age: records[i].age, ger: records[i].ger,
+				      frc: records[i].frc, spk: records[i].spk,
+				      bid: base_oid, tid: range_oid, uid: top_oid, cid: color_oid };
 	    
 	    if ( base_oid && ! api_data.bounds_id[base_oid] ) base_bounds.push(base_oid);
-	    if ( top_oid && ! api_data.bounds_id[top_oid] ) base_bounds.push(top_oid);
+	    if ( range_oid && ! api_data.bounds_id[range_oid] ) base_bounds.push(top_oid);
 	    if ( color_oid && ! api_data.bounds_id[color_oid] ) base_bounds.push(color_oid);
+
+	   bounds_edit.lookup[oid] = i;
 	}
 	
 	// If we have found any base bounds, fire off a query to get their info as well. Once the
@@ -536,23 +561,42 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	{
 	    var bounds_str = base_bounds.join(',');
 	    
-	    $.getJSON(data_url + 'bounds/list.json?bound_id=' + bounds_str)
+	    $.getJSON(data_url + 'timescales/bounds.json?bound_id=' + bounds_str)
 		.done(function ( response ) { callbackBaseBounds( response.records ) })
 		.fail(function ( ) { window.alert('ERROR: could not query base bounds') });
+	}
+	
+	// Go through the bounds again and figure out which bounds (if any) are referenced as interval
+	// top by any bound except the immediately following one. Mark these with the extended_top flag.
+	
+	for ( var i=1; i < bounds_edit.values.length; i++ )
+	{
+	    var top_oid = bounds_edit.values[i].uid;
+	    var top_index = bounds_edit.lookup[top_oid];
+	    
+	    if ( top_index && top_index != i-1 && ! bounds_edit.values[top_index].top_label )
+	    {
+		var letter = bounds_edit.next_label % 26;
+		var mult = (bounds_edit.next_label + 1) / 26;
+		var new_label = '';
+		
+		for ( var i = 0; i < mult; i++ )
+		{
+		    new_label += bounds_edit.labels.charAt(letter);
+		}
+		
+		bounds_edit.values[top_index].top_label = new_label;
+		bounds_edit.next_label++;
+	    }
 	}
 	
 	// Now generate the bounds form from the data we received.
 	
 	var content = "";
-
-	content += generateBoundsFormRow(0, records[0]);
 	
-	var prev_interval = records[0].lnm;
-	
-	for ( var i=1; i < records.length; i++ )
+	for ( var i=0; i < bounds_edit.values.length; i++ )
 	{
-	    content += generateBoundsFormRow(i, records[i], prev_interval);
-	    prev_interval = records[i].lnm;
+	    content += generateBoundsFormRow(i, bounds_edit.values[i]);
 	}
 	
 	return content;
@@ -567,9 +611,13 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	content += ageInput(i, record);
 	content += btpInput(i, record);
 
+	content += '</td><td id="bound_linktd_' + i + '">';
+	
+	content += topInput(i, record);
+	
 	content += '</td><td id="bound_reftd_' + i + '">';
 	
-	content += boundsBaseContent( i, record );
+	content += baseInput( i, record );
 	
 	content += "</td></tr>\n";
 	
@@ -584,7 +632,8 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 
     function intervalInput ( i, record )
     {
-	var name = (record.iid == undefined) ? '  --' : record.inm;
+	// var name = (record.iid == undefined) ? '  --' : record.inm;
+	var name = record.inm || '  --';
 	var content = '<input type="text" class="tsed_control" id="bound_int_' + i + '" value="' + name + "\"/><br>\n";
 	return content;
     }
@@ -634,14 +683,40 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	
 	content += '<img class="spike" id="bound_spike_' + i + '" width="20" height="20" src="' + resource_url + src + '">' + "\n";
 	
+	var frc = record.frc || '';
+	var attrs = record.btp == 'fraction' ? '' : ' style="display: none;"';
+	
+	content += '&nbsp&nbsp;<input class="tsed_control" id="bound_frac_' + i +
+	    '" type="text" size="6" value="' + frc + '"' + attrs + ">\n";
+	
+	return content;
+    }
+
+    function topInput ( i, record )
+    {
+	var content = '';
+	var top_oid;
+	
+	if ( top_oid = record.uid )
+	{
+	    var top_index = bounds_edit.lookup[top_oid];
+	    var top_label = bounds_edit.values[top_index].top_label;
+
+	    if ( top_label ) content += '<span class="tsed_top_ref">' + top_label + "</span>\n";
+	}
+	
+	if ( record.top_label )
+	{
+	    if ( content ) content += "<br>";
+	    
+	    content += '<span class="tsed_top_label">' + record.top_label + "</span>\n";
+	}
+	
 	return content;
     }
     
-    function boundsBaseContent ( i, record )
+    function baseInput ( i, record )
     {
-	if ( ! typeof(record) == "object" && record.btp )
-	    return "";
-	
 	var content = '';
 	
 	var start_tag = '<span id="base_bound_' + i + '" class="tsed_timescale_label" ' +
@@ -649,189 +724,242 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	
 	if ( record.btp == "same" )
 	{
-	    var base_record = api_data.bounds_id[record.bid];
-	    var base_label = 'unknown';
-	    var base_age = '';
+	    content = linkBoundBtn(i, record, 'base', api_data.bounds_id[record.bid]);
 	    
-	    if ( base_record )
-	    {
-		base_label = base_record.inm || 'unknown';
-		base_age = base_record.age || '';
-		
-		if ( base_record.age == "0" )
-		    base_label = 'Present';
-		
-	    	if ( base_record.sid > 5 && base_record.sid != record.sid )
-		{
-		    var base_tsrecord = api_data.timescales_id[base_record.sid];
-		    base_label += ' [' + base_tsrecord.nam + ']';
-		}
-		
-		var spike_elt = document.getElementById('bound_spike_' + i);
-		
-		if ( spike_elt && record.btp == 'same' )
-		{
-		    if ( base_record.spk )
-			spike_elt.src = resource_url + '/spike.png';
-		    else
-			spike_elt.src = resource_url + '/nospike.png';
-		}
-	    }
-
-	    else
-	    {
-		content = 'choose a boundary';
-	    }
+ 	    // content = start_tag + base_label + '</span>';
 	    
- 	    content = start_tag + base_label + '</span>';
-	    
-	    if ( record.age_diff )
-	    {
-		var rounded = Math.round(record.age_diff * 1000) / 1000;
-		content += '<span class="tsed_diff"> (' + rounded > 0 ? "+" : "" + rounded + ')</span>';
-	    }
+	    // if ( record.age_diff )
+	    // {
+	    // 	var rounded = Math.round(record.age_diff * 1000) / 1000;
+	    // 	content += '<span class="tsed_diff"> (' + rounded > 0 ? "+" : "" + rounded + ')</span>';
+	    // }
 	}
 	
-	else if ( record.btp == "percent" )
+	else if ( record.btp == "fraction" )
 	{
-	    var base_record = api_data.bounds_id[record.bid];
-	    var top_record = api_data.bounds_id[record.tid];
-	    var base_label = 'unknown';
-	    var top_label = 'unknown';
-	    var base_age = '';
-	    var top_age = '';
+	    content = linkBoundBtn(i, record, 'range', api_data.bounds_id[record.tid]);
+
+	    content += "<br>\n";
+
+	    content += linkBoundBtn(i, record, 'base', api_data.bounds_id[record.bid]);
+
+	    	    
 	    
-	    var percent = record.ofs != undefined ? record.ofs : '';
-	    var pctfield = '<input class="tsed_control" id="bound_percent_' + i + 
-		'" type="text" size="6" value="' + percent + '">% of ';
+	//     var base_record = api_data.bounds_id[record.bid];
+	//     var top_record = api_data.bounds_id[record.tid];
+	//     var base_label = 'unknown';
+	//     var top_label = 'unknown';
 	    
-	    if ( base_record && top_record )
-	    {
-		base_label = base_record.inm || 'unknown';
-		top_label = top_record.inm || top_record.age || 'unknown';
+	//     var fraction = record.frc != undefined ? record.frc : '';
+	//     var frcfield = '<input class="tsed_control" id="bound_frc_' + i + 
+	// 	'" type="text" size="6" value="' + fraction + '">';
+	    
+	//     if ( base_record )
+	//     {
+	// 	base_label = base_record.inm || 'unknown';
+	// 	if ( base_record.sid > 5 && base_record.sid != record.sid )
+	// 	{
+	// 	    var base_tsrecord = api_data.timescales_id[base_record.sid];
+	// 	    base_label += ' [' + base_tsrecord.nam + ']';
+	// 	}
 		
-	    	if ( (base_record.sid > 5 && base_record.sid != record.sid) ||
-		     (top_record.sid > 5 && top_record.sid != record.sid) )
-		{
-		    var base_tsrecord = api_data.timescales_id[base_record.sid];
-		    var top_tsrecord = api_data.timescales_id[top_record.sid];
+	// 	top_label = top_record.inm || top_record.age || 'unknown';
+		
+	//     	if ( (base_record.sid > 5 && base_record.sid != record.sid) ||
+	// 	     (top_record.sid > 5 && top_record.sid != record.sid) )
+	// 	{
+	// 	    var base_tsrecord = api_data.timescales_id[base_record.sid];
+	// 	    var top_tsrecord = api_data.timescales_id[top_record.sid];
 		    
-		    if ( base_record.sid == top_record.sid )
-		    {
-			top_label += ' [' + base_tsrecord.nam + ']';
-		    }
+	// 	    if ( base_record.sid == top_record.sid )
+	// 	    {
+	// 		top_label += ' [' + base_tsrecord.nam + ']';
+	// 	    }
 		    
-		    else
-		    {
-			base_label += ' [' + base_tsrecord.nam + ']';
-			top_label += ' [' + top_tsrecord.nam + ']';
-		    }
-		}
+	// 	    else
+	// 	    {
+	// 		base_label += ' [' + base_tsrecord.nam + ']';
+	// 		top_label += ' [' + top_tsrecord.nam + ']';
+	// 	    }
+	// 	}
 		
-		if ( base_record.age != undefined )
-		    base_label += ' (' + base_record.age + ')';
-		if ( top_record.age != undefined )
-		    top_label += ' (' + top_record.age + ')';
+	// 	if ( base_record.age != undefined )
+	// 	    base_label += ' (' + base_record.age + ')';
+	// 	if ( top_record.age != undefined )
+	// 	    top_label += ' (' + top_record.age + ')';
 		
-		content = pctfield + start_tag + base_label + ' - ' + top_label + '</span>';
-	    }
+	// 	content = pctfield + start_tag + base_label + ' - ' + top_label + '</span>';
+	//     }
 
-	    else if ( base_record )
-	    {
-		base_label = base_record.inm || 'unknown';
+	//     else if ( base_record )
+	//     {
+	// 	base_label = base_record.inm || 'unknown';
 
-	    	if ( base_record.sid > 5 && base_record.sid != record.sid )
-		{
-		    var base_tsrecord = api_data.timescales_id[base_record.sid];
-		    base_label += ' [' + base_tsrecord.nam + ']';
-		}
+	//     	if ( base_record.sid > 5 && base_record.sid != record.sid )
+	// 	{
+	// 	    var base_tsrecord = api_data.timescales_id[base_record.sid];
+	// 	    base_label += ' [' + base_tsrecord.nam + ']';
+	// 	}
 
-		content = start_tag + base_label + '</span>';
-	    }
-
-	    else
-	    {
-		content = start_tag + 'choose a boundary</span>';
-	    }
+	// 	content = start_tag + base_label + '</span>';
+	//     }
+	
+	// else
+	//     {
+	// 	content = start_tag + 'choose a boundary</span>';
+	//     }
 	}
 	
-	else if ( record.btp == "alternate" )
-	{
-	    var base_record = api_data.bounds_id[record.bid];
-	    var top_record = api_data.bounds_id[record.tid];
-	    var base_label = 'unknown';
-	    var top_label = 'unknown';
+	// else if ( record.btp == "alternate" )
+	// {
+	//     var base_record = api_data.bounds_id[record.bid];
+	//     var top_record = api_data.bounds_id[record.tid];
+	//     var base_label = 'unknown';
+	//     var top_label = 'unknown';
 	    
-	    if ( base_record && top_record )
-	    {
-		base_label = base_record.inm || 'unknown';
-		top_label = top_record.inm || top_record.age || 'unknown';
+	//     if ( base_record && top_record )
+	//     {
+	// 	base_label = base_record.inm || 'unknown';
+	// 	top_label = top_record.inm || top_record.age || 'unknown';
 		
-	    	if ( (base_record.sid > 5 && base_record.sid != record.sid) ||
-		     (top_record.sid > 5 && top_record.sid != record.sid) )
-		{
-		    var base_tsrecord = api_data.timescales_id[base_record.sid];
-		    var top_tsrecord = api_data.timescales_id[top_record.sid];
+	//     	if ( (base_record.sid > 5 && base_record.sid != record.sid) ||
+	// 	     (top_record.sid > 5 && top_record.sid != record.sid) )
+	// 	{
+	// 	    var base_tsrecord = api_data.timescales_id[base_record.sid];
+	// 	    var top_tsrecord = api_data.timescales_id[top_record.sid];
 		    
-		    if ( base_record.sid == top_record.sid )
-		    {
-			top_label += ' [' + base_tsrecord.nam + ']';
-		    }
+	// 	    if ( base_record.sid == top_record.sid )
+	// 	    {
+	// 		top_label += ' [' + base_tsrecord.nam + ']';
+	// 	    }
 		    
-		    else
-		    {
-			base_label += ' [' + base_tsrecord.nam + ']';
-			top_label += ' [' + top_tsrecord.nam + ']';
-		    }
-		}
+	// 	    else
+	// 	    {
+	// 		base_label += ' [' + base_tsrecord.nam + ']';
+	// 		top_label += ' [' + top_tsrecord.nam + ']';
+	// 	    }
+	// 	}
 		
-		content = start_tag + base_label + ' - ' + top_label + '</span>';
-	    }
+	// 	content = start_tag + base_label + ' - ' + top_label + '</span>';
+	//     }
 	    
-	    else if ( base_record )
-	    {
-		base_label = base_record.inm || 'unknown';
+	//     else if ( base_record )
+	//     {
+	// 	base_label = base_record.inm || 'unknown';
 
-	    	if ( base_record.sid > 5 && base_record.sid != record.sid )
-		{
-		    var base_tsrecord = api_data.timescales_id[base_record.sid];
-		    base_label += ' [' + base_tsrecord.nam + ']';
-		}
+	//     	if ( base_record.sid > 5 && base_record.sid != record.sid )
+	// 	{
+	// 	    var base_tsrecord = api_data.timescales_id[base_record.sid];
+	// 	    base_label += ' [' + base_tsrecord.nam + ']';
+	// 	}
 
-		content = start_tag + base_label + '</span>';
-	    }
+	// 	content = start_tag + base_label + '</span>';
+	//     }
 
-	    else if ( top_record )
-	    {
-		base_label = 'here';
-		top_label = top_record.inm || top_record.age || 'unknown';
+	//     else if ( top_record )
+	//     {
+	// 	base_label = 'here';
+	// 	top_label = top_record.inm || top_record.age || 'unknown';
 		
-	    	if ( top_record.sid > 5 && top_record.sid != record.sid )
-		{
-		    var top_tsrecord = api_data.timescales_id[top_record.sid];
-		    top_label += ' [' + top_tsrecord.nam + ']';
-		}
+	//     	if ( top_record.sid > 5 && top_record.sid != record.sid )
+	// 	{
+	// 	    var top_tsrecord = api_data.timescales_id[top_record.sid];
+	// 	    top_label += ' [' + top_tsrecord.nam + ']';
+	// 	}
 		
-		content = start_tag + 'this age' + ' - ' + top_label + '</span>';
-	    }
+	// 	content = start_tag + 'this age' + ' - ' + top_label + '</span>';
+	//     }
 
-	    else if ( record.iid == undefined )
-	    {
-		content = start_tag + 'this age</span>';
-	    }
+	//     else if ( record.iid == undefined )
+	//     {
+	// 	content = start_tag + 'this age</span>';
+	//     }
 	    
-	    else
-	    {
-		content = start_tag + 'choose a boundary</span>';
-	    }
-	}
+	//     else
+	//     {
+	// 	content = start_tag + 'choose a boundary</span>';
+	//     }
+	// }
 	
-	else if ( record.age == 0 )
-	{
-	    return '<span class="tsed_timescale_label">Present</span>';
-	}
+	// else if ( record.age == 0 )
+	// {
+	//     return '<span class="tsed_timescale_label">Present</span>';
+	// }
 	
 	return content;
+    }
+
+    function linkBoundBtn ( i, record, type, link_record )
+    {
+	var link_label;
+	
+	if ( link_record )
+	{
+	    link_label = link_record.inm || 'unknown';
+	    
+	    if ( link_record.age == "0" )
+		link_label = 'Present';
+	    
+	    else if ( link_label == "" )
+		link_label = link_record.oid;
+	    
+	    if ( link_record.sid > 5 && link_record.sid != record.sid )
+	    {
+		var link_tsrecord = api_data.timescales_id[link_record.sid];
+		link_label += ' [' + link_tsrecord.nam + ']';
+	    }
+	}
+	
+	else
+	{
+	    link_label = 'choose a boundary';
+	}
+	
+	var content = '<span id="' + type + '_bound_' + i + '" class="tsed_timescale_label" ' +
+	    'onclick="tsapp.chooseLinkBound(\'' + type + "'," + i + ')">';
+
+	content += link_label;
+	content += '</span>';
+	
+	return content;
+    }
+
+    function updateLinkBtn ( type, i, link_record )
+    {
+	var link_elt = myGetElement(type + '_bound_' + i);
+	var link_label;
+	
+	if ( type == "base" )
+	    bounds_edit.values[i].bid = link_record.oid;
+	
+	else if ( type == "range" )
+	    bounds_edit.values[i].tid = link_record.oid;
+	
+	else if ( type == "color" )
+	    bounds_edit.values[i].cid = link_record.oid;
+	
+	if ( link_elt )
+	{
+	    if ( type == 'top' )
+		link_label = link_record.top_label || link_record.oid;
+
+	    else
+		link_label = link_record.inm || 'unknown';
+	    
+	    if ( link_record.age == "0" )
+		link_label = 'Present';
+
+	    else if ( link_label == "" )
+		link_label = link_record.oid;
+
+	    if ( link_record.sid > 5 && link_record.sid != bounds_edit.values[i].sid )
+	    {
+		var link_tsrecord = api_data.timescales_id[link_record.sid];
+		link_label += ' [' + link_tsrecord.nam + ']';
+	    }
+	    
+	    link_elt.innerHTML = link_label;
+	}
     }
     
     function setBoundType ( i, bound_type )
@@ -1076,7 +1204,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 
     function displayTimescaleAttrs ( timescale_id )
     {
-	$.getJSON(data_url + 'timescales/single.json?timescale_id=' + timescale_id)
+	$.getJSON(data_url + 'timescales/single.json?show=desc&timescale_id=' + timescale_id)
 	    .done(function ( response ) { displayTimescaleAttrsResult(timescale_id, response.records[0]) })
 	    .fail(function ( xhr ) { document.alert("ERROR: could not load timescale attrs"); });
     }
@@ -1106,6 +1234,8 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	var new_type = getElementValue('ts_type');
 	var new_extent = getElementValue('ts_extent');
 	var new_taxon = getElementValue('ts_taxon');
+	var new_comments = getElementValue('ts_comments');
+	var new_type = getElementValue('ts_type');
 	
 	var current = api_data.timescales_id[edit_timescale_id];
 	
@@ -1113,6 +1243,8 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	var current_type = current.typ || '';
 	var current_extent = current.ext || '';
 	var current_taxon = current.txn || '';
+	var current_comments = current.tsc || '';
+	var current_type = current.typ || '';
 	
 	// check for empty timescale name; figure out a mechanism for error display;
 	// on completion, clear the attrs
@@ -1123,6 +1255,8 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	if ( new_type != current_type ) edit_timescale_attrs.timescale_type = new_type;
 	if ( new_extent != current_extent ) edit_timescale_attrs.timescale_extent = new_extent;
 	if ( new_taxon != current_taxon ) edit_timescale_attrs.timescale_taxon = new_taxon;
+	if ( new_comments != current_comments ) edit_timescale_attrs.timescale_comments = new_comments;
+	if ( new_type != current_type ) edit_timescale_attrs.timescale_type = new_type;
 	
 	if ( _.size(edit_timescale_attrs) )
 	    $(document.ts_attrs_form.save).addClass('tsed_active_save');
@@ -1154,122 +1288,192 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     
     this.saveTimescaleAttrs = saveTimescaleAttrs;
     
-    function selectBaseBound ( which, i )
+    function chooseLinkBound ( which, i )
     {
-	var initial_bound_id;
+	var current_bound_id;
+	var current_timescale_id;
 	
 	if ( which == 'base' )
-	    initial_bound_id = bounds_edit.values[i].bid;
+	    current_bound_id = bounds_edit.values[i].bid;
 	else if (which == 'range' )
-	    initial_bound_id = bounds_edit.values[i].tid;
+	    current_bound_id = bounds_edit.values[i].tid;
 	else if ( which == 'color' )
-	    initial_bound_id = bounds_edit.values[i].cid;
-	else if ( which == 'ref' )
-	    initial_bound_id = bounds_edit.values[i].rid;
+	    current_bound_id = bounds_edit.values[i].cid;
+	else if ( which == 'top' )
+	    current_bound_id = bounds_edit.values[i].uid;
 	else
 	    return;
 	
-	var initial_timescale_id = api_data.bounds_id[initial_bound_id].sid;
+	if ( current_bound_id )
+	    current_timescale_id = api_data.bounds_id[current_bound_id].sid;
 	
-	openBoundSelector( initial_bound_id, initial_timescale_id, function (bound_id, timescale_id) {
-	    setBaseBound( which, i, bound_id, timescale_id) } );
+	else
+	    current_timescale_id = bounds_edit.source_timescale_id || 1;
+	
+	if ( which == 'base' || which == 'range' )
+	{
+	    openBoundSelector( current_timescale_id, current_bound_id, function (record) {
+		updateLinkBtn(which, i, record) } );
+	}
+
+	else if ( which == 'top' )
+	{
+	    openTopSelector( current_bound_id, function(record) {
+		updateLinkBtn('top', i, record) } );
+	}
+    }
+    
+    this.chooseLinkBound = chooseLinkBound;
+
+    function openTimescaleSelector ( current_timescale_id )
+    {
+	var modal_elt = myGetElement("bound_selector");
+
+	if ( modal_elt )
+	{
+	    modal_elt.style.display = "block";
+
+	    
+	}
+    }
+    
+    function openBoundSelector ( current_timescale_id, current_bound_id, callback )
+    {
+	var modal_elt = myGetElement("bound_selector");
+
+	if ( modal_elt )
+	{
+	    modal_elt.style.display = "block";
+	    
+	    modal_state.bound_selector.choice_callback = callback;
+	    modal_state.bound_selector.close_callback = closeBoundSelector;
+	    
+	    setBoundSelector(current_timescale_id, current_bound_id);
+	}
     }
 
-    this.selectBaseBound = selectBaseBound;
-    
-    function openBoundSelector ( initial_bound_id, initial_timescale_id, callback )
-    {
-	bound_selector_callback = callback;
-	bound_selector_box.style.display = "block";
-	
-	base_timescale_id = initial_timescale_id;
-	base_bound_id = initial_bound_id;
-	
-	selectBaseTimescale(initial_timescale_id);
-    }
-    
     function closeBoundSelector ( )
     {
-	bound_selector_callback = undefined;
-	bound_selector_box.style.display = "none";
+	modal_state.bound_selector.choice_callback = undefined;
     }
     
-    this.closeBoundSelector = closeBoundSelector;
-
-    function selectBaseTimescale ( timescale_id )
+    function setBoundSelector ( timescale_id, bound_id )
     {
-	highlightBaseTimescale(timescale_id);
+	bound_selector.timescale_id = timescale_id;
+	bound_selector.selected_id = bound_id;
+	bound_selector.values = [ ];
 	
-	displayBaseBoundsList(base_bounds_box, timescale_id);
-    }
-
-    this.selectBaseTimescale = selectBaseTimescale;
-
-    function highlightBaseTimescale ( timescale_id )
-    {
 	$("#bound_selector_timescales td").each(function () {
 	    if ( this.title == timescale_id ) $(this).addClass("tsed_highlight");
 	    else $(this).removeClass("tsed_highlight");
 	});
-    }
-
-    function displayBaseBoundsList ( display_element, timescale_id )
-    {
-	display_element.innerHTML = "loading...";
 	
-	$.getJSON(data_url + 'bounds/list.json?timescale_id=' + timescale_id)
-	    .done(function ( response ) { displayBaseBoundsListResult(display_element, timescale_id, response.records) })
+	bound_selector_bounds_box.innerHTML = "loading...";
+	
+	$.getJSON(data_url + 'timescales/bounds.json?timescale_id=' + timescale_id)
+	    .done(function ( response ) { boundSelectorGenerateBoundsList(bound_id, response.records) })
 	    .fail(function ( xhr ) { display_element.innerHTML = "ERROR: could not load bounds"; failSaveBounds(xhr); });
     }
-
-    function displayBaseBoundsListResult ( display_element, timescale_id, records )
+    
+    function modalChoice ( id, value )
     {
-	if ( records )
-	    display_element.innerHTML = generateBaseBoundsContent( timescale_id, records );
+	if ( modal_state[id] )
+	    modal_state[id].choice_callback(value);
+	
 	else
-	    display_element.innerHTML = "ERROR: no records";
-
-	var a = 1;
+	    console.log("ERROR: no modal_state '" + id + "'");
     }
 
-    function generateBaseBoundsContent ( timescale_id, records )
+    this.modalChoice = modalChoice;
+    
+    function modalClose ( id )
+    {
+	var modal_elt = myGetElement(id);
+
+	if ( modal_elt ) modal_elt.display = "none";
+
+	if ( modal_state.bound_selector.close_callback )
+	    modal_state.bound_selector.close_callback();
+	
+	modal_state.bound_selector.choice_callback = undefined;
+    }
+    
+    this.modalClose = modalClose;
+
+    // function boundSelectorSelectBound ( bound_id )
+    // {
+    // 	$("#bound_selector_timescales td").each(function () {
+    // 	    if ( this.title == bound_id ) $(this).addClass("tsed_highlight");
+    // 	    else $(this).removeClass("tsed_highlight");
+    // 	});
+    // }
+    
+    function boundSelectorGenerateBoundsList ( select_bound_id, records )
     {
 	var content = "";
-	var prev_interval = records[0].lnm;
+	var selected_index;
+
+	if ( records.length == 0 ) return;
 	
-	content += generateBaseBoundsRow(0, records[0]);
-	
-	for ( var i=1; i < records.length; i++ )
+	for ( var i=0; i < records.length; i++ )
 	{
-	    content += generateBaseBoundsRow(i, records[i]);
+	    content += generateBoundSelectorRow(i, records[i]);
+
+	    if ( records[i].oid == select_bound_id ) selected_index = i;
 	}
 	
-	return content;
+	bound_selector_bounds_box.innerHTML = content;
+	
+	bound_selector.selected_index = selected_index;
+	
+	var selected_elt = myGetElement("bound_select_" + selected_index);
+
+	if ( selected_elt )
+	{
+	    $(selected_elt).addClass("tsed_highlight");
+	    selected_elt.scrollIntoView(false);
+	}
     }
 
-    function generateBaseBoundsRow ( i, record )
+    function generateBoundSelectorRow ( i, record )
     {
-	var class_str = record.oid == base_bound_id ? 'tsed_highlight' : '';
-	var content = '<tr><td class="' + class_str + '" onclick="tsapp.pickBaseBound(' + i + ')">';
+	bound_selector.values[i] = record;
+	
+	// var class_str = record.oid == select_bound_id ? 'tsed_highlight' : '';
+	var content = '<tr><td id="bound_select_' + i + '" title="' + record.oid + '" onclick="tsapp.boundSelectorPickBound(' + i + ')">';
 	
 	var age = record.age != undefined ? record.age : '(undefined)';
 	if ( record.ger != undefined ) age += '&nbsp;&plusmn;&nbsp;' + record.ger;
-
+	
 	var interval = record.inm || 'Top';
 	var type = record.btp || '(undefined)';
 	
 	content += '<span class="tsed_control">' + interval + '<br/>&nbsp;&nbsp;&nbsp;' + age + '&nbsp;-&nbsp;' + type + '</span>';
 	content += "</td></tr>\n";
-
+	
 	return content;
     }
 
-    function pickBaseBound ( i )
+    function boundSelectorPickBound ( i )
     {
-	alert("selected bound " + i);
+	// alert("selected bound " + i);
+	var select_id = "bound_select_" + i;
+	
+	$("#bound_selector_bounds td").each(function () {
+    	    if ( this.id == select_id ) $(this).addClass("tsed_highlight");
+    	    else $(this).removeClass("tsed_highlight");
+    	});
+
+	if ( bound_selector.selected_index == i && bound_selector.callback )
+	{
+	    bound_selector.callback(bound_selector.values[i]);
+	    closeBoundSelector();
+	}
+	
+	bound_selector.selected_index = i;
     }
 
-    this.pickBaseBound = pickBaseBound;
+    this.boundSelectorPickBound = boundSelectorPickBound;
     
     // The following code is used for modeling a set of absolute bounds based on the
     // international boundary ages with percentages. We go through all of the bounds in the
