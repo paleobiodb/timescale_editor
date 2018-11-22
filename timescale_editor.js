@@ -28,12 +28,12 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     var ts_attrs_pane;
     var bounds_pane;
     
-    var pane_group = { 'ts_attrs_pane': 1, 'bounds_pane': 1,
-		       'edit_attrs': 2, 'edit_bounds' : 2 };
+    var pane_group = { 'ts_attrs_pane': 1, 'bounds_pane': 1, 'intervals_pane': 1,
+		       'edit_attrs': 2, 'edit_bounds': 2, 'edit_intervals': 2 };
     
     var init_box;
-    var timescales_box;
     var bounds_box;
+    var intervals_box;
     var ts_attrs_box;
     var bound_selector_bounds_box;
     
@@ -47,8 +47,10 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     
     var bound_selector_box;
 
-    var modal_state = { timescale_selector: { },
-			bound_selector: { } };
+    var appstate = { timescale_selector: { },
+		     bound_selector: { },
+		     bounds: { },
+		     intervals: { } };
     
     var international_no = { 'tsc:1': 1, 'tsc:2': 2, 'tsc:3': 3,
 			     'tsc:4': 4, 'tsc:5' : 5 };
@@ -78,21 +80,16 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     {
 	// Do various initialization steps
 	
-	timescales_pane = myGetElement("timescales_pane");
-	
-	if ( ! timescales_pane )
-	    return badInit();
-	
 	selectPane('ts_attrs_pane', 'edit_attrs');
 	
 	init_box = myGetElement("db_initmsg");
-	timescales_box = myGetElement("timescales_box");
 	bounds_box = myGetElement("bounds_box");
+	intervals_box = myGetElement("intervals_box");
 	bound_selector_box = myGetElement("bound_selector");
 	bound_selector_bounds_box = myGetElement("bound_selector_bounds")
 	
-	if ( !init_box || ! timescales_box || ! bounds_box )
-	    return badInit();
+	// if ( !init_box || ! timescales_box || ! bounds_box )
+	//     return badInit();
  	
 	// initialize some form elements
 	
@@ -394,7 +391,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	others.sort( function(a, b) { return a.nam && b.nam ? a.nam.localeCompare(b.nam)
 					   : a.nam ? a.nam : b.nam; } );
 
-	var selector_expr = "tsapp.modalChoice('" + modal_id + "', record.oid)";
+	var selector_expr = "tsapp.modalChoice('" + modal_id + "','%oid')";
 	var content = "";
 	
 	for ( var i=0; i < internationals.length; i++ )
@@ -411,20 +408,21 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     
     function generateTableLine ( record, onclick_expr )
     {
-	return "<tr><td title=\"" + record.oid + "\" onclick=\"" + onclick_expr + "\">" + record.nam + "</td></tr>\n";
+	return "<tr><td title=\"" + record.oid + "\" onclick=\"" +
+	    onclick_expr.replace('%oid', record.oid) + "\">" + record.nam + "</td></tr>\n";
     }
     
-    function selectTimescale ( timescale_id )
-    {
-	edit_timescale_id = timescale_id;
+    // function selectTimescale ( timescale_id )
+    // {
+    // 	edit_timescale_id = timescale_id;
 	
-	highlightTimescale(timescale_id);
+    // 	highlightTimescale(timescale_id);
 	
-	displayBoundsList(bounds_box, edit_timescale_id);
-	displayTimescaleAttrs(edit_timescale_id);
-    }
+    // 	displayBoundsList(bounds_box, edit_timescale_id);
+    // 	displayTimescaleAttrs(edit_timescale_id);
+    // }
     
-    this.selectTimescale = selectTimescale;
+    // this.selectTimescale = selectTimescale;
     
     function highlightTimescale ( timescale_id )
     {
@@ -434,39 +432,44 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	});
     }
     
-    function displayBoundsList ( display_element, timescale_id )
+    function displayBoundsList ( bounds_elt, intervals_elt, timescale_id )
     {
-	display_element.innerHTML = "<tr><td>loading...</td></tr>";
-
+	bounds_elt.innerHTML = "<tr><td>loading...</td></tr>";
+	intervals_elt.innerHTML = "<tr><td>loading...</td></tr>";
+	
 	var records = api_data.bounds_timescale_id[timescale_id];
 	
 	if ( records && records.length > 0 )
 	{
-	    display_element.innerHTML = generateBoundsFormContent( timescale_id, records );
+	    bounds_elt.innerHTML = generateBoundsFormContent( timescale_id, records );
+	    intervals_elt.innerHTML = generateIntervalDisplayContent( );
 	}
 
 	else
 	{
 	    $.getJSON(data_url + 'timescales/bounds.json?timescale_id=' + timescale_id)
-		.done(function ( response ) { displayBoundsListResult(display_element, timescale_id, response.records) })
-		.fail(function ( xhr ) { display_element.innerHTML = "ERROR: could not load bounds"; failSaveBounds(xhr); });
+		.done(function ( response ) { displayBoundsListResult(bounds_elt, intervals_elt,
+								      timescale_id, response.records) })
+		.fail(function ( xhr ) { bounds_elt.innerHTML = "ERROR: could not load bounds"; failSaveBounds(xhr); });
 	}
     }
     
-    this.displayBoundsList = displayBoundsList;
+    // this.displayBoundsList = displayBoundsList;
     
-    function displayBoundsListResult ( display_element, timescale_id, records )
+    function displayBoundsListResult ( bounds_elt, intervals_elt, timescale_id, records )
     {
 	if ( records )
 	{
 	    api_data.bounds_timescale_id[timescale_id] = records;
 	    updateBoundsData(records);
 	    
-	    display_element.innerHTML = generateBoundsFormContent( timescale_id, records );
+	    bounds_elt.innerHTML = generateBoundsFormContent( timescale_id, records );
+	    intervals_elt.innerHTML = generateIntervalDisplayContent( );
 	}
 	else
 	{
-	    display_element.innerHTML = "<td><tr>ERROR: no records</td></tr>";
+	    bounds_elt.innerHTML = "<td><tr>ERROR: no records</td></tr>";
+	    intervals_elt.innerHTML = "<td><tr>ERROR: no records</td></tr>";
 	}
     }
 
@@ -513,9 +516,337 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    alert("Need to load following ids: " + id_list);
 	}
     }
+
+    function computeIntervalStack ( )
+    {
+	appstate.bounds.values = bounds_edit.values;
+	appstate.bounds.lookup2 = { };
+	appstate.intervals.columns = [ [ ] ];
+	appstate.intervals.column_max = [ 0 ];
+	appstate.intervals.list = [ ];
+	
+	var bound_list = appstate.bounds.values;
+	var bound_lookup = appstate.bounds.lookup2;
+	var bound_by_age = { };
+	var age_list = [ ];
+	
+	for ( var i=0; i < bound_list.length; i++ )
+	{
+	    bound_lookup[bound_list[i].oid] = bound_list[i];
+
+	    var age = bound_list[i].age;
+	    bound_by_age[age] = bound_by_age[age] || bound_list[i].oid;
+	}
+	
+	for ( var i=0; i < bound_list.length; i++ )
+	{
+	    var bottom_id = bound_list[i].oid;
+	    var top_id = bound_list[i].uid;
+	    var name = bound_list[i].inm || '';
+	    
+	    if ( top_id )
+	    {
+		bound_lookup[bottom_id].top_age = bound_lookup[top_id].age;
+		bound_lookup[bottom_id].upper_name = name;
+		bound_lookup[top_id].lower_name = bound_lookup[top_id].lower_name || [ ];
+		bound_lookup[top_id].lower_name.push(name);
+		bound_lookup[top_id].is_top = 1;
+		
+		addInterval(bottom_id, top_id);
+	    }
+	}
+
+	for (var age in bound_by_age)
+	    age_list.push(age);
+
+	appstate.intervals.ages = age_list.sort(function (a, b) { return a - b });
+	appstate.intervals.bound_by_age = bound_by_age;
+	
+	var a = 1;
+    }
+
+    function addInterval ( bottom_id, top_id )
+    {
+	var columns = appstate.intervals.columns;
+	var column_max = appstate.intervals.column_max;
+	var interval_list = appstate.intervals.list;
+	var bound_lookup = appstate.bounds.lookup2;
+	
+	var interval = { bottom_id: bottom_id,
+			 top_id: top_id,
+			 bottom_age: bound_lookup[bottom_id].age,
+			 top_age: bound_lookup[top_id].age,
+			 name: bound_lookup[bottom_id].upper_name,
+		       };
+	
+	var select_col = 0;
+	
+	while ( column_max[select_col] > interval.top_age )
+	{
+	    select_col++;
+	    
+	    if ( columns[select_col] == undefined )
+	    {
+		columns[select_col] = [ ];
+		column_max[select_col] = 0;
+	    }
+	}
+	
+	columns[select_col].push(interval);
+	column_max[select_col] = interval.bottom_age;
+	interval_list.push(interval);
+    }
+
+    // Generate the content for the 'timescale intervals' display pane
+    
+    function generateIntervalDisplayContent ( )
+    {
+	var columns = appstate.intervals.columns;
+	var interval_list = appstate.intervals.list;
+	var bound_list = appstate.bounds.values;
+	var bound_lookup = appstate.bounds.lookup2;
+	var max_age, min_age, min_span;
+	var target_interval_height = 50;
+
+	// The basic purpose of this function is to generate one table row that displays the
+	// entirety of the timescale in multiple columns.  If there is at least one interval to
+	// display, then we proceed to iterate through the interval list.
+	
+	var content = "<tr>\n";
+	
+	if ( interval_list.length )
+	{
+	    // Start by computing the minimum and maximum age from all of the intervals defined in
+	    // this timescale. We compute this directly from the intervals (which are computed
+	    // from the bounds) rather than relying on the min_age and max_age attributes of the
+	    // timescale. This is probably overkill, but will make sure that the display is
+	    // calibrated to the set of intervals actually being displayed.
+	    
+	    min_age = Number(interval_list[0].top_age);
+	    max_age = Number(interval_list[0].bottom_age);
+	    
+	    for ( var i=1; i < interval_list.length; i++ )
+	    {
+		var top_age = Number(interval_list[i].top_age);
+		var bottom_age = Number(interval_list[i].bottom_age);
+		
+		if ( top_age < min_age ) min_age = top_age;
+		if ( bottom_age > max_age ) max_age = bottom_age;
+	    }
+
+	    // Then compute a scale factor to convert interval age ranges to pixels.
+	    
+	    var scale = bound_list.length * target_interval_height / ( max_age - min_age );
+	    
+	    // Now, for each interval column previously computed by computeIntervalStack(), we
+	    // create a table cell that itself contains a table displaying the column of intervals.
+	    
+	    for ( var i=0; i < columns.length; i++ )
+	    {
+		content += '<td class="tsed_column_container"><table class="tsed_column">' + "\n";
+		
+		var this_col = columns[i];
+		var last_age = min_age;
+
+		// We start with a gap at the top, which will provide space for the
+		// top-of-timescale age label.
+		
+		content += intervalContent(18, 'gap', '');
+		
+		// Then add one single-cell table row for each interval or gap in the column.
+		
+		for ( var j=0; j < this_col.length; j++ )
+		{
+		    var top_age = Number(this_col[j].top_age);
+		    var bottom_age = Number(this_col[j].bottom_age);
+		    
+		    // If the top age of the current interval is not equal to the bottom age of
+		    // the previous one, we add a gap row.
+		    
+		    if ( top_age > last_age )
+		    {
+			content += intervalContent(Math.round((top_age - last_age) * scale), 'gap', '');
+		    }
+
+		    // Now add the interval row.
+		    
+		    content += intervalContent(Math.round((bottom_age - top_age) * scale),
+					       'interval', this_col[j].name);
+		    
+		    last_age = bottom_age;
+		    
+		    // var height_px = Math.round((bottom_age - top_age) * scale);
+		    
+		    // content += '<tr><td class="tsed_interval" style="height: ' + height_px + 'px; ' +
+		    // 	'">' + this_col[j].name;
+		    // //'bottom: ' + bottom_px + 'px"><td>' + this_col[j].name;
+		    // content += "</td></tr>\n";
+		}
+		
+		// Then close the column.
+		
+		content += "</table></td>\n";
+	    }
+
+	    // Now we go back through the list of boundary ages, and create two more columns. The
+	    // first will just display one horizontal mark at each interval boundary, and the
+	    // second will display the boundary age and the basis for that age. Clicking on any of
+	    // these entries will bring up the boundary editing pane.
+	    
+	    var ruler_column = '<td class="tsed_column_container"><table class="tsed_ruler_column">' + "\n";
+	    var ages_column = '<td class="tsed_column_container"><table class="tsed_ages_column">' + "\n";
+	    
+	    var age_list = appstate.intervals.ages;
+	    var bound_by_age = appstate.intervals.bound_by_age;
+	    
+	    // Iterate through each separate age. If multiple boundaries share the same age, the
+	    // information describing the one in the leftmost column will be displayed. If the
+	    // user clicks on a different interval then the cells corresponding to its upper and
+	    // lower boundary ages will be changed to display its boundaries instead.
+	    
+	    for ( j=0; j < age_list.length; j++ )
+	    {
+		var bound_id = bound_by_age[age_list[j]];
+		var bound_record = bound_id ? bound_lookup[bound_id] : { "error": 1 };
+		var mark_segment_height, age_segment_height;
+		
+		// The initial segment height is different for the mark and age columns, because
+		// the age column must be offset that its text matches the marks.
+		
+		if ( j == 0 )
+		{
+		    mark_segment_height = 18;
+		    age_segment_height = 28;
+		}
+		
+		else
+		{
+		    mark_segment_height = Math.round((age_list[j]-age_list[j-1]) * scale);
+		    age_segment_height = mark_segment_height;
+		}
+		
+		ruler_column += boundMarkContent(mark_segment_height);
+		ages_column += boundAgeBasisContent(age_segment_height, age_list[j], bound_record);
+	    }
+	    
+	    // Now close out those two columns and then add them to the display panel content.
+	    
+	    ruler_column += "</table></td>\n";
+	    ages_column += "</table></td>\n";
+
+	    content += ruler_column + ages_column;
+	}
+
+	// If there are no intervals, create an empty table row.
+
+	else
+	{
+	    content += "<td></td>";
+	}
+	
+	content += "</tr>";
+	
+	return content;
+    }
+    
+    // Return the HTML code for one single-cell table row representing either an interval or a gap
+    // in one of the display columns for the current timescale.
+    
+    function intervalContent ( height_px, type, name )
+    {
+	var content = '<tr><td class="tsed_' + type + '" style="height: ' + height_px + 'px; max-height: ' +
+	    height_px + 'px"><div style="height: 10px">' + name + "</div></td></tr>\n";
+	return content;
+    }
+    
+    // function timeMarkContent ( height_px, age, is_top )
+    // {
+    // 	var border = is_top ? 'border-top: 0px' : '';
+    // 	var content = '<tr><td class="tsed_time_mark" style="height: ' + height_px + 'px; ' + border +
+    // 	    '">' + '<div class="tsed_mark_age" style="height: 10px; top: 3px">' + age + "</div></td></tr>\n";
+	
+    // 	return content;
+    // }
+
+    // Return the HTML code for one single-cell table row marking one boundary age in the current
+    // timescale. 
+    
+    function boundMarkContent ( height_px, is_top )
+    {
+	// var border = is_top ? 'border-top: 0px' : '';
+	var border = 'border-top: 0px';
+	var content = '<tr><td class="tsed_time_mark" style="height: ' + height_px + 'px; ' + border +
+	    '"></td></tr>' + "\n";
+	return content;
+    }
+
+    // Return the HTML code for one multi-cell table row displaying a boundary age and the basis
+    // for that age.
+    
+    function boundAgeBasisContent (height_px, age, record )
+    {
+	var content = '<tr style="height: ' + height_px + 'px; max-height: ' + height_px + 'px">' +
+	    '<td class="tsed_age_basis">';
+
+	// The first cell displays the boundary age.
+	
+	content += age;
+
+	if ( record.ger )
+	{
+	    content += '&nbsp;&plusmn;&nbsp;' + record.ger;
+	}
+
+	else
+	{
+	    content += '&nbsp;&nbsp;';
+	}
+	
+	content +=  '</td><td class="tsed_age_basis">';
+
+	// The second cell displays the boundary type.
+	
+	if ( record.btp == 'absolute' || record.btp == 'spike' )
+	{
+	    content += '<em>' + record.btp + '</em>';
+	}
+	
+	else if ( record.btp == 'sameas' )
+	{
+	    content += '<em>same as</em>';
+	}
+	
+	else if ( record.btp == 'fraction' )
+	{
+	    content += '<em>modeled as</em>';
+	}
+	
+	content += '</td><td class="tsed_age_basis">';
+
+	// The third cell displays the link information if any, plus the fraction for modeled bounds.
+	
+	content += '&nbsp;';
+	
+	// Close out the row.
+	
+	content += "</td></tr>\n";
+	
+	return content;
+    }
+
+    // function timeTopContent ( height_px, age )
+    // {
+    // 	var content = '<tr><td class="tsed_time_mark" style="height: ' + height_px +
+    // 	    'px; border-top: 0px">' + '<div class="tsed_mark_age" style="height: 10px; top: 3px">' +
+    // 	    age + "</div></td></tr>\n";
+	
+    // 	return content;
+    // }
     
     function generateBoundsFormContent ( timescale_id, records )
     {
+	appstate.bounds = bounds_edit;
+	
 	// First go through the records and save the content under the application variable
 	// 'bounds_edit'. This is a singular variable, which means we can only be editing one set
 	// of bounds at once. In the process, determine which bounds are referenced as interval
@@ -548,7 +879,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 				      bid: base_oid, tid: range_oid, uid: top_oid, cid: color_oid };
 	    
 	    if ( base_oid && ! api_data.bounds_id[base_oid] ) base_bounds.push(base_oid);
-	    if ( range_oid && ! api_data.bounds_id[range_oid] ) base_bounds.push(top_oid);
+	    if ( range_oid && ! api_data.bounds_id[range_oid] ) base_bounds.push(range_oid);
 	    if ( color_oid && ! api_data.bounds_id[color_oid] ) base_bounds.push(color_oid);
 
 	   bounds_edit.lookup[oid] = i;
@@ -589,6 +920,10 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 		bounds_edit.next_label++;
 	    }
 	}
+	
+	// Now compute the stack of intervals that will be used to generate the display.
+
+	computeIntervalStack();
 	
 	// Now generate the bounds form from the data we received.
 	
@@ -1125,7 +1460,8 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 		data: update_data,
 		contentType: 'application/json; charset=utf-8',
 		dataType: 'json' })
-	    	.done(function ( response ) { displayBoundsListResult(bounds_box, edit_timescale_id, response.records) })
+	    	.done(function ( response ) { displayBoundsListResult(bounds_box, intervals_box,
+								      edit_timescale_id, response.records) })
 	    	.fail(failSaveBounds);
 	    
 	}
@@ -1325,16 +1661,33 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     
     this.chooseLinkBound = chooseLinkBound;
 
-    function openTimescaleSelector ( current_timescale_id )
+    function openTimescale ( )
     {
-	var modal_elt = myGetElement("bound_selector");
+	var modal_elt = myGetElement("timescale_selector");
 
 	if ( modal_elt )
 	{
 	    modal_elt.style.display = "block";
-
-	    
+	    appstate.timescale_selector.choice_callback = function ( id ) {
+		setTimescale(id);
+		modalClose("timescale_selector");
+	    };
 	}
+    }
+    
+    this.openTimescale = openTimescale;
+    
+    function setTimescale ( id )
+    {
+	appstate.current_timescale = id;
+	displayBoundsList(bounds_box, intervals_box, id);
+	displayTimescaleAttrs(id);
+
+	var name = api_data.timescales_id[id].nam;
+	var t1 = myGetElement("ts_name_intervals");
+	if ( t1 ) t1.textContent = name;
+	var t2 = myGetElement("ts_name_bounds");
+	if ( t2 ) t2.textContent = name;
     }
     
     function openBoundSelector ( current_timescale_id, current_bound_id, callback )
@@ -1345,8 +1698,8 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	{
 	    modal_elt.style.display = "block";
 	    
-	    modal_state.bound_selector.choice_callback = callback;
-	    modal_state.bound_selector.close_callback = closeBoundSelector;
+	    appstate.bound_selector.choice_callback = callback;
+	    appstate.bound_selector.close_callback = closeBoundSelector;
 	    
 	    setBoundSelector(current_timescale_id, current_bound_id);
 	}
@@ -1354,7 +1707,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 
     function closeBoundSelector ( )
     {
-	modal_state.bound_selector.choice_callback = undefined;
+	appstate.bound_selector.choice_callback = undefined;
     }
     
     function setBoundSelector ( timescale_id, bound_id )
@@ -1377,11 +1730,11 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     
     function modalChoice ( id, value )
     {
-	if ( modal_state[id] )
-	    modal_state[id].choice_callback(value);
+	if ( appstate[id] )
+	    appstate[id].choice_callback(value);
 	
 	else
-	    console.log("ERROR: no modal_state '" + id + "'");
+	    console.log("ERROR: no appstate '" + id + "'");
     }
 
     this.modalChoice = modalChoice;
@@ -1390,12 +1743,10 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     {
 	var modal_elt = myGetElement(id);
 
-	if ( modal_elt ) modal_elt.display = "none";
+	if ( modal_elt ) modal_elt.style.display = "none";
 
-	if ( modal_state.bound_selector.close_callback )
-	    modal_state.bound_selector.close_callback();
-	
-	modal_state.bound_selector.choice_callback = undefined;
+	if ( appstate[id].close_callback )
+	    appstate[id].close_callback();
     }
     
     this.modalClose = modalClose;

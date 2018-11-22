@@ -29,6 +29,81 @@
     color: #AD2800;
 }
 
+.tsed_box_header {
+    text-align: center;
+    font-size: 1.5em;
+}
+
+#intervals_box {
+    display: block;
+    max-height: 400px;
+    vertical-align: top;
+    border-spacing: 10;
+    border: 2px solid black;
+}
+
+.tsed_column_container {
+    padding: 10px;
+    vertical-align: top;
+}
+
+.tsed_column {
+    /* border: 1px solid green;*/
+    font-size: 0.8em;
+    padding: 10px;
+    text-align: center;
+}
+
+.tsed_interval {
+    border: 1px solid black;
+    min-width: 100px;
+    padding-left: 5px;
+    padding-right: 5px;
+    overflow: hidden;
+}
+
+.tsed_gap {
+    border: 0px;
+    font-size: 0.75em;
+}
+
+.tsed_ruler_column {
+    font-size: 0.8em;
+    padding: 5px;
+    text-align: left;
+}
+
+.tsed_time_mark {
+    border-top: 1px solid black;
+    border-bottom: 1px solid black;
+    min-width: 10px;
+    max-width: 10px;
+    vertical-align: bottom;
+}
+
+.tsed_ages_column {
+    font-size: 0.8em;
+    padding: 5px;
+    text-align: left;
+}
+
+.tsed_age_basis {
+    vertical-align: bottom;    
+}
+
+.tsed_mark_age {
+    position: relative;
+    left: 20px;
+    top: 10px;
+}
+
+/* .tsed_first_age { */
+/*     font-size: 0.8em; */
+/*     position: relative; */
+/*     left: 20px; */
+/*     top: -8px; */
+/* } */
+
 .tsed_top_label {
     color: #AD2800;
     padding: 3px;
@@ -129,7 +204,7 @@
     margin: 0 0 0 1em;
 }
 .btn-holder {
-    margin:2em 2em;
+    margin: 10px;
 }
 td.bound_cell {
     position: relative;
