@@ -443,6 +443,9 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	{
 	    bounds_elt.innerHTML = generateBoundsFormContent( timescale_id, records );
 	    intervals_elt.innerHTML = generateIntervalDisplayContent( );
+	    $("#intervals_box tr").each(function () {
+		$(this).on("click", null, null, boundClick);
+	    });
 	}
 
 	else
@@ -465,6 +468,9 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    
 	    bounds_elt.innerHTML = generateBoundsFormContent( timescale_id, records );
 	    intervals_elt.innerHTML = generateIntervalDisplayContent( );
+	    $("#intervals_box tr").each(function () {
+		$(this).on("click", null, null, boundClick);
+	    });
 	}
 	else
 	{
@@ -524,10 +530,11 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	appstate.intervals.columns = [ [ ] ];
 	appstate.intervals.column_max = [ 0 ];
 	appstate.intervals.list = [ ];
+	appstate.intervals.lookup = { };
 	
 	var bound_list = appstate.bounds.values;
 	var bound_lookup = appstate.bounds.lookup2;
-	var bound_by_age = { };
+	var age_to_bound_id = { };
 	var age_list = [ ];
 	
 	for ( var i=0; i < bound_list.length; i++ )
@@ -535,7 +542,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    bound_lookup[bound_list[i].oid] = bound_list[i];
 
 	    var age = bound_list[i].age;
-	    bound_by_age[age] = bound_by_age[age] || bound_list[i].oid;
+	    age_to_bound_id[age] = age_to_bound_id[age] || bound_list[i].oid;
 	}
 	
 	for ( var i=0; i < bound_list.length; i++ )
@@ -556,11 +563,11 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    }
 	}
 
-	for (var age in bound_by_age)
+	for (var age in age_to_bound_id)
 	    age_list.push(age);
 
 	appstate.intervals.ages = age_list.sort(function (a, b) { return a - b });
-	appstate.intervals.bound_by_age = bound_by_age;
+	appstate.intervals.age_to_bound_id = age_to_bound_id;
 	
 	var a = 1;
     }
@@ -570,6 +577,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	var columns = appstate.intervals.columns;
 	var column_max = appstate.intervals.column_max;
 	var interval_list = appstate.intervals.list;
+	var interval_lookup = appstate.intervals.lookup;
 	var bound_lookup = appstate.bounds.lookup2;
 	
 	var interval = { bottom_id: bottom_id,
@@ -595,6 +603,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	columns[select_col].push(interval);
 	column_max[select_col] = interval.bottom_age;
 	interval_list.push(interval);
+	interval_lookup[bottom_id] = interval;
     }
 
     // Generate the content for the 'timescale intervals' display pane
@@ -603,11 +612,13 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     {
 	var columns = appstate.intervals.columns;
 	var interval_list = appstate.intervals.list;
-	var bound_list = appstate.bounds.values;
-	var bound_lookup = appstate.bounds.lookup2;
-	var max_age, min_age, min_span;
-	var target_interval_height = 50;
-
+	var max_age, min_age;
+	
+	// Constants for computing interval heights
+	
+	const target_height = 50;
+	const min_height = 20;
+	
 	// The basic purpose of this function is to generate one table row that displays the
 	// entirety of the timescale in multiple columns.  If there is at least one interval to
 	// display, then we proceed to iterate through the interval list.
@@ -622,21 +633,39 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    // timescale. This is probably overkill, but will make sure that the display is
 	    // calibrated to the set of intervals actually being displayed.
 	    
-	    min_age = Number(interval_list[0].top_age);
-	    max_age = Number(interval_list[0].bottom_age);
+	    min_age = interval_list[0].top_age;
+	    max_age = interval_list[0].bottom_age;
 	    
 	    for ( var i=1; i < interval_list.length; i++ )
 	    {
 		var top_age = Number(interval_list[i].top_age);
 		var bottom_age = Number(interval_list[i].bottom_age);
 		
-		if ( top_age < min_age ) min_age = top_age;
-		if ( bottom_age > max_age ) max_age = bottom_age;
+		if ( Number(top_age) < Number(min_age) ) min_age = top_age;
+		if ( Number(bottom_age) > Number(max_age) ) max_age = bottom_age;
 	    }
-
-	    // Then compute a scale factor to convert interval age ranges to pixels.
 	    
-	    var scale = bound_list.length * target_interval_height / ( max_age - min_age );
+	    // Then determine the height in pixels at which each boundary age in this timescale should be displayed.
+	    // Compute a scale factor to convert interval age ranges to pixels.
+	    
+	    var bound_list = appstate.bounds.values;
+	    var age_list = appstate.intervals.ages;
+	    var age_to_pixels = { };
+	    var cumulative_height = 0;
+	    
+	    var scale = bound_list.length * target_height / ( max_age - min_age );
+	    
+	    for ( var i=0; i < age_list.length; i++ )
+	    {
+		var this_age = age_list[i];
+		var last_age = i > 0 ? age_list[i-1] : min_age;
+		
+		var interval_height = Math.max(Math.round((this_age - last_age) * scale), min_height);
+		
+		cumulative_height += interval_height;
+		
+		age_to_pixels[this_age] = cumulative_height;
+	    }
 	    
 	    // Now, for each interval column previously computed by computeIntervalStack(), we
 	    // create a table cell that itself contains a table displaying the column of intervals.
@@ -651,27 +680,31 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 		// We start with a gap at the top, which will provide space for the
 		// top-of-timescale age label.
 		
-		content += intervalContent(18, 'gap', '');
+		content += intervalRow('tsint_' + this_col[0].top_id, age_to_pixels[min_age], 'gap', '');
 		
 		// Then add one single-cell table row for each interval or gap in the column.
 		
 		for ( var j=0; j < this_col.length; j++ )
 		{
-		    var top_age = Number(this_col[j].top_age);
-		    var bottom_age = Number(this_col[j].bottom_age);
+		    var top_age = this_col[j].top_age;
+		    var bottom_age = this_col[j].bottom_age;
+		    var top_id = this_col[j].top_id;
+		    var bottom_id = this_col[j].bottom_id;
 		    
 		    // If the top age of the current interval is not equal to the bottom age of
 		    // the previous one, we add a gap row.
 		    
-		    if ( top_age > last_age )
+		    if ( Number(top_age) > Number(last_age) )
 		    {
-			content += intervalContent(Math.round((top_age - last_age) * scale), 'gap', '');
+			var gap_height = age_to_pixels[top_age] - age_to_pixels[last_age];
+			content += intervalRow('tsint_' + top_id, gap_height, 'gap', '');
 		    }
-
+		    
 		    // Now add the interval row.
 		    
-		    content += intervalContent(Math.round((bottom_age - top_age) * scale),
-					       'interval', this_col[j].name);
+		    var interval_height = age_to_pixels[bottom_age] - age_to_pixels[top_age];
+		    
+		    content += intervalRow('tsint_' + bottom_id, interval_height, 'interval', this_col[j].name);
 		    
 		    last_age = bottom_age;
 		    
@@ -696,44 +729,45 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    var ruler_column = '<td class="tsed_column_container"><table class="tsed_ruler_column">' + "\n";
 	    var ages_column = '<td class="tsed_column_container"><table class="tsed_ages_column">' + "\n";
 	    
-	    var age_list = appstate.intervals.ages;
-	    var bound_by_age = appstate.intervals.bound_by_age;
+	    var bound_lookup = appstate.bounds.lookup2;
 	    
 	    // Iterate through each separate age. If multiple boundaries share the same age, the
 	    // information describing the one in the leftmost column will be displayed. If the
 	    // user clicks on a different interval then the cells corresponding to its upper and
 	    // lower boundary ages will be changed to display its boundaries instead.
 	    
+	    var last_age = min_age;
+	    
 	    for ( j=0; j < age_list.length; j++ )
 	    {
-		var bound_id = bound_by_age[age_list[j]];
-		var bound_record = bound_id ? bound_lookup[bound_id] : { "error": 1 };
-		var mark_segment_height, age_segment_height;
+		var this_age = age_list[j];
 		
 		// The initial segment height is different for the mark and age columns, because
 		// the age column must be offset that its text matches the marks.
-		
+
+		var mark_height = age_to_pixels[this_age] - age_to_pixels[last_age];
+		var age_height = mark_height;
+
 		if ( j == 0 )
 		{
-		    mark_segment_height = 18;
-		    age_segment_height = 28;
+		    mark_height = min_height;
+		    age_height = min_height + 3;
 		}
 		
-		else
-		{
-		    mark_segment_height = Math.round((age_list[j]-age_list[j-1]) * scale);
-		    age_segment_height = mark_segment_height;
-		}
+		var bound_id = appstate.intervals.age_to_bound_id[this_age];
+		var bound_record = bound_id ? bound_lookup[bound_id] : { "error": 1 };
 		
-		ruler_column += boundMarkContent(mark_segment_height);
-		ages_column += boundAgeBasisContent(age_segment_height, age_list[j], bound_record);
+		ruler_column += boundMarkRow('tsmark_' + bound_id, mark_height);
+		ages_column += boundAgeBasisRow('tsbound_' + bound_id, age_height, age_list[j], bound_record);
+		
+		last_age = this_age;
 	    }
 	    
 	    // Now close out those two columns and then add them to the display panel content.
 	    
 	    ruler_column += "</table></td>\n";
 	    ages_column += "</table></td>\n";
-
+	    
 	    content += ruler_column + ages_column;
 	}
 
@@ -752,46 +786,47 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     // Return the HTML code for one single-cell table row representing either an interval or a gap
     // in one of the display columns for the current timescale.
     
-    function intervalContent ( height_px, type, name )
+    function intervalRow ( id, height_px, type, name )
     {
-	var content = '<tr><td class="tsed_' + type + '" style="height: ' + height_px + 'px; max-height: ' +
-	    height_px + 'px"><div style="height: 10px">' + name + "</div></td></tr>\n";
+	var content = '<tr id="' + id + '" ' +
+	    ' style="height: ' + height_px + 'px; max-height: ' +
+	    height_px + 'px"><td class="tsed_' + type + '"><div style="height: 10px">' +
+	    name + "</div></td></tr>\n";
 	return content;
     }
     
-    // function timeMarkContent ( height_px, age, is_top )
-    // {
-    // 	var border = is_top ? 'border-top: 0px' : '';
-    // 	var content = '<tr><td class="tsed_time_mark" style="height: ' + height_px + 'px; ' + border +
-    // 	    '">' + '<div class="tsed_mark_age" style="height: 10px; top: 3px">' + age + "</div></td></tr>\n";
-	
-    // 	return content;
-    // }
-
     // Return the HTML code for one single-cell table row marking one boundary age in the current
-    // timescale. 
+    // timescale.
     
-    function boundMarkContent ( height_px, is_top )
+    function boundMarkRow ( id, height_px )
     {
-	// var border = is_top ? 'border-top: 0px' : '';
-	var border = 'border-top: 0px';
-	var content = '<tr><td class="tsed_time_mark" style="height: ' + height_px + 'px; ' + border +
-	    '"></td></tr>' + "\n";
+	var content = '<tr id="' + id + '" style="height: ' + height_px +
+	    'px"><td class="tsed_time_mark"></td></tr>' + "\n";
 	return content;
     }
-
+    
     // Return the HTML code for one multi-cell table row displaying a boundary age and the basis
     // for that age.
     
-    function boundAgeBasisContent (height_px, age, record )
+    function boundAgeBasisRow ( id, height_px, age, record )
     {
-	var content = '<tr style="height: ' + height_px + 'px; max-height: ' + height_px + 'px">' +
-	    '<td class="tsed_age_basis">';
+	var content = '<tr id="' + id + '" onclick="tsapp.selectBounds(\'' + id +
+	    '\')" style="height: ' + height_px + 'px; max-height: ' +
+	    height_px + 'px">';
+	
+	content += boundAgeBasisContent(age, record);
 
+	return content;
+    }
+
+    function boundAgeBasisContent ( age, record )
+    {
+	var content = '<td class="tsed_age_basis"><div style="height: 10px">';
+	
 	// The first cell displays the boundary age.
 	
 	content += age;
-
+	
 	if ( record.ger )
 	{
 	    content += '&nbsp;&plusmn;&nbsp;' + record.ger;
@@ -802,8 +837,8 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    content += '&nbsp;&nbsp;';
 	}
 	
-	content +=  '</td><td class="tsed_age_basis">';
-
+	content +=  '</div></td><td class="tsed_age_basis"><div style="height: 10px">';
+	
 	// The second cell displays the boundary type.
 	
 	if ( record.btp == 'absolute' || record.btp == 'spike' )
@@ -811,7 +846,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    content += '<em>' + record.btp + '</em>';
 	}
 	
-	else if ( record.btp == 'sameas' )
+	else if ( record.btp == 'same' )
 	{
 	    content += '<em>same as</em>';
 	}
@@ -821,19 +856,196 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    content += '<em>modeled as</em>';
 	}
 	
-	content += '</td><td class="tsed_age_basis">';
-
+	content += '</td><td class="tsed_age_basis"><div style="height: 10px">'
+	
 	// The third cell displays the link information if any, plus the fraction for modeled bounds.
+
+	if ( record.btp == 'same' )
+	{
+	    content += boundLinkContent(record.bid);
+	}
+
+	else if ( record.btp == 'fraction' )
+	{
+	    content += boundLinkContent(record.bid, record.tid);
+	    content += '&nbsp;:&nbsp;' + record.frc;
+	}
 	
 	content += '&nbsp;';
 	
 	// Close out the row.
 	
-	content += "</td></tr>\n";
+	content += "</div></td></tr>\n";
 	
 	return content;
     }
 
+    function boundLinkContent ( bound_id, range_id )
+    {
+	var name = api_data.bounds_id[bound_id].inm;
+
+	if ( ! name && api_data.bounds_id[bound_id].age == "0" )
+	    name = "Present";
+
+	var content = '<span class="tsed_timescale_label">' + name + '</span>';
+
+	if ( range_id && range_id != api_data.bounds_id[bound_id].uid )
+	{
+	    var top_name = api_data.bounds_id[range_id].inm;
+
+	    content += '&nbsp;&emdash;&nbsp;<span class="tsed_timescale_label">' + top_name + '</span>';
+	}
+	
+	return content;
+    }
+
+    // INTERACTIVITY
+
+    // Given the id of a table row in the interval panel, select that row and de-select the
+    // others. The row can be either an interval row or a boundary row.
+    
+    function boundClick ( e )
+    {
+	if ( e.currentTarget.id ) selectBounds( e.currentTarget.id );
+    }
+
+    this.boundClick = boundClick;
+    
+    function selectBounds ( row_id )
+    {
+	// Select the indicated row and de-select all others.
+	
+	$("#intervals_box tr").each(function () {
+	    if ( this.id == row_id ) $(this).addClass("tsed_selected");
+	    else $(this).removeClass("tsed_selected");
+	});
+	
+	// If the argument is empty, then we are done.
+	
+	if ( row_id == undefined || row_id == "" ) return;
+	
+	// If this is an interval row, then check to make sure it isn't a gap. If it is, then
+	// de-select it. Otherwise, select both the top and bottom boundary.
+	
+	if ( row_id.substr(0, 6) == 'tsint_' )
+	{
+	    var bottom_id = row_id.substr(6);
+	    var int_record = appstate.intervals.lookup[bottom_id];
+	    
+	    if ( int_record )
+	    {
+		var current_bottom_id = appstate.intervals.age_to_bound_id[int_record.bottom_age];
+		var current_top_id = appstate.intervals.age_to_bound_id[int_record.top_age];
+		
+		if ( current_bottom_id != bottom_id )
+		{
+		    appstate.intervals.age_to_bound_id[int_record.bottom_age] = bottom_id;
+		    selectUpdateElement('tsbound_' + current_bottom_id, 'tsbound_' + bottom_id,
+					appstate.bounds.lookup2[bottom_id]);
+		}
+		
+		else
+		{
+		    selectAddElement('tsbound_' + current_bottom_id);
+		}
+
+		if ( int_record.top_id )
+		{
+		    if ( current_top_id != int_record.top_id )
+		    {
+			appstate.intervals.age_to_bound_id[int_record.top_age] = int_record.top_id;
+			selectUpdateElement('tsbound_' + current_top_id, 'tsbound_' + int_record.top_id,
+					    appstate.bounds.lookup2[int_record.top_id]);
+			
+		    }
+
+		    else
+		    {
+			selectAddElement('tsbound_' + current_top_id);
+		    }
+		}
+
+		else
+		{
+		    selectClear();
+		}
+	    }
+
+	    else
+	    {
+		selectClear();
+	    }
+	    
+	    // if ( appstate.bounds.lookup2[bound_id] )
+	    // {
+	    // 	var top_id = appstate.bounds.lookup2[bound_id].uid;
+
+	    // 	if ( top_id )
+	    // 	{
+	    // 	    selectAddElement('tsbound_' + top_id);
+		    
+		    
+		    
+	    // 	}
+		
+	    // 	else selectRemoveElement(row_id);
+	    // }
+	}
+	
+	else if ( row_id.substr(0, 8) == 'tsbound_' )
+	{
+	    var bound_id = row_id.substr(8);
+
+	    selectAddElement('tsint_' + bound_id);
+	    
+	    if ( appstate.bounds.lookup2[bound_id] )
+	    {
+		var top_id = appstate.bounds.lookup2[bound_id].uid;
+
+		if ( ! top_id ) selectRemoveElement('tsint_' + bound_id);
+	    }
+	}
+	
+	var a = 1;	// we can stop here when debugging
+    }
+    
+    this.selectBounds = selectBounds;
+
+    function selectClear ( )
+    {
+	$("#intervals_box tr").each(function () {
+	    $(this).removeClass("tsed_selected");
+	});
+    }
+    
+    function selectAddElement ( row_id )
+    {
+	var elt = myGetElement(row_id);
+	if ( elt ) $(elt).addClass('tsed_selected');
+    }
+
+    function selectUpdateElement ( row_id, new_row_id, bound_record )
+    {
+	var elt = myGetElement(row_id);
+	var content = boundAgeBasisContent(bound_record.age, bound_record);
+	
+	if ( elt ) $(elt).addClass('tsed_selected');
+	if ( elt && content ) elt.innerHTML = content;
+	if ( elt && new_row_id )
+	{
+	    elt.id = new_row_id;
+	    elt.onclick = "tsapp.selectBounds('" + new_row_id + "')";
+	}
+    }
+    
+    function selectRemoveElement ( row_id )
+    {
+	var elt = myGetElement(row_id);
+	if ( elt ) $(elt).removeClass('tsed_selected');
+    }
+    
+    // OLD STUFF BELOW:
+    
     // function timeTopContent ( height_px, age )
     // {
     // 	var content = '<tr><td class="tsed_time_mark" style="height: ' + height_px +

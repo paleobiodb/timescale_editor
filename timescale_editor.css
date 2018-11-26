@@ -31,7 +31,7 @@
 
 .tsed_box_header {
     text-align: center;
-    font-size: 1.5em;
+    font-size: 1.2em;
 }
 
 #intervals_box {
@@ -56,6 +56,7 @@
 
 .tsed_interval {
     border: 1px solid black;
+    vertical-align: center;
     min-width: 100px;
     padding-left: 5px;
     padding-right: 5px;
@@ -67,35 +68,52 @@
     font-size: 0.75em;
 }
 
+.tsed_column .tsed_selected {
+    background-color: #47C7EA;
+}
+
 .tsed_ruler_column {
     font-size: 0.8em;
-    padding: 5px;
+    padding: 2px;
     text-align: left;
 }
 
 .tsed_time_mark {
-    border-top: 1px solid black;
+    border-top: 0px;
     border-bottom: 1px solid black;
     min-width: 10px;
     max-width: 10px;
-    vertical-align: bottom;
 }
 
+.tsed_column .tsed_selected {
+    background-color: #47C7EA;
+}
 .tsed_ages_column {
     font-size: 0.8em;
-    padding: 5px;
+    padding: 7px;
     text-align: left;
 }
 
 .tsed_age_basis {
-    vertical-align: bottom;    
+    padding-left: 5px;
+    padding-right: 5px;
+    vertical-align: bottom;
 }
 
-.tsed_mark_age {
-    position: relative;
-    left: 20px;
-    top: 10px;
+.tsed_column .tsed_selected {
+    background-color: #47C7EA;
 }
+
+.tsed_ages_column .tsed_selected {
+    font-weight: bold;
+}
+
+
+/* .tsed_mark_age { */
+/*     position: relative; */
+/*     left: 20px; */
+/*     top: 10px; */
+/* } */
 
 /* .tsed_first_age { */
 /*     font-size: 0.8em; */
@@ -117,7 +135,7 @@
 
 
 .tsed_timescale_label {
-    background-color: rgba(245,245,245,0.6);
+    background-color: rgba(207, 185, 185, 0.6);
     padding: 0.25em;
 }
 
