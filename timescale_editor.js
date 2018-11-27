@@ -107,6 +107,11 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	
 	setInnerHTML("ts_type", content);
 	
+	content = makeOptionList( [ '', '--', 'absolute', 'absolute', 'spike', 'spike',
+				    'same', 'same as', 'fraction', 'modeled as' ] );
+
+	setInnerHTML("be_bound_type", content);
+	
 	// Initiate an API call to fetch necessary data.  This has a callback to handle the data
 	// that comes back, and a failure callback too.
 	
@@ -841,6 +846,12 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	
 	// The second cell displays the boundary type.
 	
+	var spike_img = '/nospike.png';
+	if ( record.spk || record.btp && record.btp == 'spike' ) spike_img = '/spike.png';
+	
+	content += '<img class="tsed_spike" width="20" height="20" src="' +
+	    resource_url + spike_img + '">&nbsp;&nbsp;' + "\n";
+	
 	if ( record.btp == 'absolute' || record.btp == 'spike' )
 	{
 	    content += '<em>' + record.btp + '</em>';
@@ -859,7 +870,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	content += '</td><td class="tsed_age_basis"><div style="height: 10px">'
 	
 	// The third cell displays the link information if any, plus the fraction for modeled bounds.
-
+	
 	if ( record.btp == 'same' )
 	{
 	    content += boundLinkContent(record.bid);
@@ -911,6 +922,9 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 
     this.boundClick = boundClick;
     
+    // Select the bounds associated with the specified table row, which can either be an interval
+    // row or a bound row.
+    
     function selectBounds ( row_id )
     {
 	// Select the indicated row and de-select all others.
@@ -924,31 +938,45 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	
 	if ( row_id == undefined || row_id == "" ) return;
 	
-	// If this is an interval row, then check to make sure it isn't a gap. If it is, then
-	// de-select it. Otherwise, select both the top and bottom boundary.
+	// If the user clicked on an interval row, then check to make sure it isn't a gap. If it
+	// is, then de-select it. Otherwise, select both the top and bottom boundary.
 	
 	if ( row_id.substr(0, 6) == 'tsint_' )
 	{
 	    var bottom_id = row_id.substr(6);
 	    var int_record = appstate.intervals.lookup[bottom_id];
+	    var bounds_record = appstate.bounds.lookup2[bottom_id];
 	    
 	    if ( int_record )
 	    {
+		// Determine the bounds that are currently displayed for the top and bottom ages
+		// of this interval. If there are overlapping intervals in this timescale, these
+		// might not be the ones corresponding to this particular interval.
+		
 		var current_bottom_id = appstate.intervals.age_to_bound_id[int_record.bottom_age];
 		var current_top_id = appstate.intervals.age_to_bound_id[int_record.top_age];
+
+		// If the bottom bound displayed for the bottom age is not correct for this
+		// interval, then update it to reflect the bottom bound of this interval.
 		
 		if ( current_bottom_id != bottom_id )
 		{
 		    appstate.intervals.age_to_bound_id[int_record.bottom_age] = bottom_id;
 		    selectUpdateElement('tsbound_' + current_bottom_id, 'tsbound_' + bottom_id,
-					appstate.bounds.lookup2[bottom_id]);
+					bounds_record);
 		}
+		
+		// Otherwise, just select the existing bound.
 		
 		else
 		{
 		    selectAddElement('tsbound_' + current_bottom_id);
 		}
 
+		// If the interval has a top bound, then select that bound as well. If the top
+		// bound for this interval is different than the top bound currently displayed for
+		// the top age, then update it to reflect the top bound of this interval.
+		
 		if ( int_record.top_id )
 		{
 		    if ( current_top_id != int_record.top_id )
@@ -959,51 +987,98 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 			
 		    }
 
+		    // If the proper bound is already displayed for the top age, then just select it.
+		    
 		    else
 		    {
 			selectAddElement('tsbound_' + current_top_id);
 		    }
 		}
 
+		// If there is no top bound for this interval, then the user clicked on a gap. So
+		// deselect the gap row and leave the bottom bound selected.
+		
 		else
 		{
-		    selectClear();
+		    $("#intervals_box tr").each(function () {
+			if ( this.id == row_id ) $(this).removeClass("tsed_selected");
+		    });
 		}
+		
+		// Now fill in the bound editor with the lower bound of the interval.
+		
+		fillBoundEditor(bottom_id);
 	    }
+	    
+	    // If there is no interval record but there is a bound record, select that and
+	    // deselect the interval row.
+	    
+	    else if ( bounds_record )
+	    {
+		var current_bottom_id = appstate.intervals.age_to_bound_id[bounds_record.age];
+		
+		// If the bottom bound displayed for the bottom age is not correct for this
+		// interval, then update it to reflect the bottom bound of this interval.
+		
+		if ( current_bottom_id != bottom_id )
+		{
+		    appstate.intervals.age_to_bound_id[bounds_record.age] = bottom_id;
+		    selectUpdateElement('tsbound_' + current_bottom_id, 'tsbound_' + bottom_id,
+					bounds_record);
+		}
 
+		// Otherwise, just select the bounds row and deselect the interval row.
+		
+		else
+		{
+		    selectAddElement('tsbound_' + current_bottom_id);
+		    
+		    $("#intervals_box tr").each(function () {
+			if ( this.id == row_id ) $(this).removeClass("tsed_selected");
+		    });
+		}
+
+		// Now fill in the bound editor with the lower bound of the interval.
+		
+		fillBoundEditor(bottom_id);
+	    }
+	    
+	    // If there is no record, then clear the selection entirely.
+	    
 	    else
 	    {
 		selectClear();
+		clearBoundEditor();
 	    }
-	    
-	    // if ( appstate.bounds.lookup2[bound_id] )
-	    // {
-	    // 	var top_id = appstate.bounds.lookup2[bound_id].uid;
-
-	    // 	if ( top_id )
-	    // 	{
-	    // 	    selectAddElement('tsbound_' + top_id);
-		    
-		    
-		    
-	    // 	}
-		
-	    // 	else selectRemoveElement(row_id);
-	    // }
 	}
+	
+	// If the user clicked on a bound row, then select it plus all intervals for which it is
+	// either a top or bottom bound.
 	
 	else if ( row_id.substr(0, 8) == 'tsbound_' )
 	{
 	    var bound_id = row_id.substr(8);
-
+	    
 	    selectAddElement('tsint_' + bound_id);
 	    
 	    if ( appstate.bounds.lookup2[bound_id] )
 	    {
 		var top_id = appstate.bounds.lookup2[bound_id].uid;
-
+		
 		if ( ! top_id ) selectRemoveElement('tsint_' + bound_id);
 	    }
+	    
+	    // Now select any intervals that have this bound as their top.
+	    
+	    for ( var i=0; i < appstate.intervals.list.length; i++ )
+	    {
+		if ( appstate.intervals.list[i].top_id == bound_id )
+		    selectAddElement('tsint_' + appstate.intervals.list[i].bottom_id);
+	    }
+
+	    // Now fill in the bound editor.
+
+	    fillBoundEditor(bound_id);
 	}
 	
 	var a = 1;	// we can stop here when debugging
@@ -1043,6 +1118,177 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	var elt = myGetElement(row_id);
 	if ( elt ) $(elt).removeClass('tsed_selected');
     }
+    
+    function fillBoundEditor ( bound_id )
+    {
+	var msg = myGetElement('bound_editor_msg');
+	var bound_record = appstate.bounds.lookup2[bound_id];
+	
+	// If the bound record cannot be found for some reason, display a message and clear the
+	// form.
+	
+	if ( ! bound_record )
+	{
+	    msg.style.display = 'block';
+	    msg.textContent = "Bound '" + bound_id + "' was not found";
+	    clearBoundEdit();
+	    return;
+	}
+	
+	// Otherwise, we fill in the form using the bound record. First the interval name.
+
+	if ( bound_record.inm != undefined && bound_record.inm != '' )
+	    setElementValue('be_intname', bound_record.inm);
+	else
+	    setElementValue('be_intname', 'none');
+
+	// Then the lower name(s).
+
+	var lower = '';
+	
+	for ( var i=0; i < appstate.bounds.values.length; i++ )
+	{
+	    var record = appstate.bounds.values[i];
+
+	    if ( record.uid && record.uid == bound_id && record.inm && record.inm != '' )
+	    {
+		if ( lower != '' ) lower += ' / ';
+		lower += record.inm;
+	    }
+	}
+
+	if ( lower == '' ) lower = 'none';
+	
+	setElementValue('be_lower', lower);
+	
+	// Then the age and age error.
+	
+	if ( bound_record.age != undefined && bound_record.age != '' )
+	    setElementValue('be_age', bound_record.age);
+	else
+	    setElementValue('be_age', '');
+
+	if ( bound_record.ger != undefined && bound_record.ger != '' )
+	    setElementValue('be_age_err', bound_record.ger);
+	else
+	    setElementValue('be_age_err', '');
+	
+	// Spike or no spike.
+
+	var spike_img = '/nospike.png';
+	if ( bound_record.spk || bound_record.btp && bound_record.btp == 'spike' )
+	    spike_img = '/spike.png';
+	
+	myGetElement("be_spike").src = resource_url + spike_img;
+	
+	// Then the bound type and link(s).
+	
+	setElementValue('be_bound_type', bound_record.btp);
+	
+	fillBoundEditorLinks(bound_record);
+	
+	// Remove any message that might have been displayed.
+	
+	msg.textContent = 'no message';
+	msg.style.display = 'none'; 
+    }
+
+    this.fillBoundEditor = fillBoundEditor;
+    
+    function fillBoundEditorLinks ( bound_record )
+    {
+	var base_elt = myGetElement("be_base_bound");
+	var range_elt = myGetElement("be_range_bound");
+	var frac_elt = myGetElement("be_fraction");
+	
+	if ( ! bound_record.btp || bound_record.btp != 'same' && bound_record.btp != 'fraction' )
+	{
+	    if ( base_elt ) base_elt.textContent = '';
+	    if ( range_elt ) range_elt.textContent = '';
+	    if ( frac_elt ) frac_elt.style.display = 'none';
+	    return;
+	}
+	
+	var base_id = bound_record.bid;
+	var range_id = bound_record.rid;
+	
+	var base_record, range_record;
+
+	if ( base_id ) base_record = api_data.bounds_id[base_id];
+	if ( range_id ) range_record = api_data.bounds_id[range_id];
+	
+	var base_name = 'click to select';
+	
+	if ( base_record )
+	{
+	    if ( base_record.inm && base_record.inm != '' )
+		name = base_record.inm;
+	    
+	    else
+	    {
+		if ( base_record.age == 0 ) name = 'Present';
+		else name = base_record.age + ' (' + base_id + ')';
+	    }
+	}
+	
+	base_elt.textContent = name;
+	
+	if ( bound_record.btp == 'fraction' )
+	{
+	    name = 'click to select';
+	    
+	    if ( base_record && range_record && base_record.tid != range_id )
+	    {
+		if ( range_record.age == 0 ) name = 'Present';
+		else name = range_record.age + ' (' + range_id + ')';
+
+		// $$$ once we pre-compute lower names, the lower name for the range bound should be displayed.
+		
+		range_elt.textContent = name;
+		range_elt.style.display = 'inline';
+	    }
+	    
+	    else
+	    {
+		range_elt.textContent = '';
+		range_elt.style.display = 'none';
+	    }
+
+	    var frac_value = '';
+	    if ( bound_record.frc != undefined ) frac_value = bound_record.frc;
+	    
+	    frac_elt.style.display = 'inline';	    
+	    frac_elt.value = frac_value;
+	}
+
+	else
+	{
+	    range_elt.textContent = '';
+	    range_elt.style.display = 'none';
+
+	    frac_elt.value = '';
+	    frac_elt.style.display = 'none';
+	}
+    }
+    
+    function clearBoundEditor ( )
+    {
+	var msg = myGetElement('bound_editor_msg');
+	
+	setElementValue('be_intname', '');
+	setElementValue('be_age', '');
+	setElementValue('be_age_err', '');
+	
+	msg.textContent = 'no message';
+	msg.style.display = 'none';
+    }
+    
+    function checkBoundEditor ( )
+    {
+	var a = 1;
+    }
+
+    this.checkBoundEditor = checkBoundEditor;
     
     // OLD STUFF BELOW:
     
@@ -1754,7 +2000,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     {
 	$.getJSON(data_url + 'timescales/single.json?show=desc&timescale_id=' + timescale_id)
 	    .done(function ( response ) { displayTimescaleAttrsResult(timescale_id, response.records[0]) })
-	    .fail(function ( xhr ) { document.alert("ERROR: could not load timescale attrs"); });
+	    .fail(function ( xhr ) { window.alert("ERROR: could not load timescale attrs"); });
     }
     
     function displayTimescaleAttrsResult ( timescale_id, record )

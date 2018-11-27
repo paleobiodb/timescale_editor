@@ -108,6 +108,34 @@
     font-weight: bold;
 }
 
+#bound_editor {
+    font-size: 0.8em;
+    max-height: 200px;
+    vertical-align: middle;
+    text-align: left;
+    padding: 10px;
+    border-spacing: 10px;
+    border-collapse: separate;
+    border: 2px solid black;
+}
+
+#bound_editor hr {
+    margin-top: 1px;
+    margin-bottom: 1px;
+    height: 2px;
+}
+
+#bound_editor_msg {
+    float: top;
+    font-style: italic;
+    font-weight: bold;
+    font-size: 0.9em;
+}
+
+.tsed_spike {
+    position: relative;
+}
+
 
 /* .tsed_mark_age { */
 /*     position: relative; */
@@ -218,18 +246,23 @@
     font-weight: 800;
     font-size: 0.8em;
 }
+
 #bounds_form {
     margin: 0 0 0 1em;
 }
+
 .btn-holder {
     margin: 10px;
 }
+
 td.bound_cell {
     position: relative;
 }
+
 .spike {
     position: absolute;
 }
+
 .dlMessageBox {
     width: 30em;
     margin: 2em;

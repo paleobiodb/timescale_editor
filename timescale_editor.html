@@ -46,7 +46,7 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
 <!-- initialization steps are complete.  If it remains visible, something has gone wrong with the -->
 <!-- initialization. -->
 
-<div id="db_initmsg" class="dlMessageBox" style="width: 300px; height: 100px;">
+<div id="db_initmsg" class="tsed_modal" style="width: 300px; height: 100px;">
 	<span id="initmsg" class="large">Initializing form, please wait...</span>
 </div>
 
@@ -124,7 +124,7 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
 	  </form>
 	 </td>
       <td id="intervals_pane" style="vertical-align: top; height: 500px; display: none">
-	<form id="intervals_form" name="bounds_form">
+	<form id="intervals_form" name="intervals_form">
 	    <h3 class="tsed_box_header" id="ts_name_intervals"></h3>
 	    <div class="btn-holder">
 	      <input type="button" class="btn" name="open" value="Open timescale" onclick="tsapp.openTimescale()">
@@ -132,7 +132,36 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
 	      <input type="reset" class="btn" name="reset" value="Reset">
 	    </div>
 	    <table id="intervals_box" style="overflow: auto">
+	      <tr><td height="400px"></td></tr>
 	    </table>
+	    <p>&nbsp;</p>
+	    <table width="100%" id="bound_editor" name="bound_editor">
+	      <div id="bound_editor_msg" style="display: none"></div>
+	      <tr>
+		<td width="5%">
+		  Next&nbsp;up:<br/>
+		  Above:<br/>
+		  Below:
+		</td><td width="20%">
+		  <div id="be_toplink" onclick="tsapp.changeLinkBound('top')"></div><br/>
+		  <input id="be_intname" type="text" size="30" onchange="tsapp.checkBoundEditor()">
+		  <hr/>
+		  <input id="be_lower" type="text" size="30" onchange="tsapp.checkBoundEditor()">
+		</td><td style="padding-top: 5px">
+		  <input id="be_age" type="text" size="8" onchange="tsapp.checkBoundEditor()"> &plusmn;
+		  <input id="be_age_err" type="text" size="5" onchange="tsapp.checkBoundEditor()"> &nbsp;
+		  <img id="be_spike" class="tsed_spike" width="20" height="20"/> &nbsp; &nbsp;
+		  <select id="be_bound_type" onchange="tsapp.checkBoundEditor()">
+		    <option value="">--</option>
+		  </select> &nbsp;
+		  <div id="be_base_bound" style="display: inline" class="tsed_timescale_label"
+		    onclick="tsapp.changeLinkBound('base')">&nbsp;</div> &nbsp;
+		  <div id="be_range_bound" style="display: inline" class="tsed_timescale_label"
+		    onclick="tsapp.changeLinkBound('range')">&nbsp;</div> &nbsp;
+		  <input id="be_fraction" style="display: none" type="text" size="8"
+		    onchange="tsapp.checkBoundEditor()"> &nbsp;
+		</td>
+	      </tr></table>
 	  </form>
       </td></tr>
   </table>
