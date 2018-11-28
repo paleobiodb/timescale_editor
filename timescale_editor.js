@@ -447,6 +447,9 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	if ( records && records.length > 0 )
 	{
 	    bounds_elt.innerHTML = generateBoundsFormContent( timescale_id, records );
+	    computeIntervalStack();
+	    computeBoundSelect();
+	    updateBoundEditor();
 	    intervals_elt.innerHTML = generateIntervalDisplayContent( );
 	    $("#intervals_box tr").each(function () {
 		$(this).on("click", null, null, boundClick);
@@ -472,6 +475,9 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    updateBoundsData(records);
 	    
 	    bounds_elt.innerHTML = generateBoundsFormContent( timescale_id, records );
+	    computeIntervalStack();
+	    computeBoundSelect();
+	    updateBoundEditor();
 	    intervals_elt.innerHTML = generateIntervalDisplayContent( );
 	    $("#intervals_box tr").each(function () {
 		$(this).on("click", null, null, boundClick);
@@ -611,6 +617,27 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	interval_lookup[bottom_id] = interval;
     }
 
+    // Generate a list of options for the bound select element.
+
+    function computeBoundSelect ( )
+    {
+	var bound_list = appstate.bounds.values;
+	var option_string = '<option value="">--</option>' + "\n";
+	
+	for ( var i=0; i<bound_list.length; i++ )
+	{
+	    var option = '<option value="' + bound_list[i].oid + '">' +	bound_list[i].age + ' (';
+	    
+	    if ( bound_list[i].inm ) option += bound_list[i].inm;
+	    else option += bound_list[i].oid;
+
+	    option += ")</option>\n";
+	    option_string += option;
+	}
+	
+	appstate.bounds.option_string = option_string;
+    }
+    
     // Generate the content for the 'timescale intervals' display pane
     
     function generateIntervalDisplayContent ( )
@@ -799,6 +826,11 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    name + "</div></td></tr>\n";
 	return content;
     }
+
+    function intervalRowContent ( record )
+    {
+	return '<td class="tsed_interval"><div style="height: 10px">' + record.inm + '</div></td>';
+    }
     
     // Return the HTML code for one single-cell table row marking one boundary age in the current
     // timescale.
@@ -820,6 +852,8 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    height_px + 'px">';
 	
 	content += boundAgeBasisContent(age, record);
+
+	content += '</tr>';
 
 	return content;
     }
@@ -886,7 +920,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	
 	// Close out the row.
 	
-	content += "</div></td></tr>\n";
+	content += "</div></td>\n";
 	
 	return content;
     }
@@ -1106,11 +1140,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	
 	if ( elt ) $(elt).addClass('tsed_selected');
 	if ( elt && content ) elt.innerHTML = content;
-	if ( elt && new_row_id )
-	{
-	    elt.id = new_row_id;
-	    elt.onclick = "tsapp.selectBounds('" + new_row_id + "')";
-	}
+	if ( elt && new_row_id ) elt.id = new_row_id;
     }
     
     function selectRemoveElement ( row_id )
@@ -1118,9 +1148,16 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	var elt = myGetElement(row_id);
 	if ( elt ) $(elt).removeClass('tsed_selected');
     }
+
+    function updateBoundEditor ( )
+    {
+	setInnerHTML("be_top_bound", appstate.bounds.option_string);
+    }
     
     function fillBoundEditor ( bound_id )
     {
+	appstate.bounds.current_id = bound_id;
+	
 	var msg = myGetElement('bound_editor_msg');
 	var bound_record = appstate.bounds.lookup2[bound_id];
 	
@@ -1135,7 +1172,15 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    return;
 	}
 	
-	// Otherwise, we fill in the form using the bound record. First the interval name.
+	// Otherwise, we fill in the form using the bound record. First the title.
+
+	setElementContent("be_title", bound_record.oid);
+
+	// Then the upper interval.
+
+	setElementValue('be_top_bound', bound_record.uid);
+	
+	// Then the interval name.
 
 	if ( bound_record.inm != undefined && bound_record.inm != '' )
 	    setElementValue('be_intname', bound_record.inm);
@@ -1274,20 +1319,76 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     function clearBoundEditor ( )
     {
 	var msg = myGetElement('bound_editor_msg');
+	var range = myGetElement('be_range_bound');
 	
+	setElementContent('be_title', '');
+	setElementValue('be_top_bound', '');
 	setElementValue('be_intname', '');
 	setElementValue('be_age', '');
 	setElementValue('be_age_err', '');
+	setElementValue('be_fraction', '');
+	setElementValue('be_base_bound', '');
+	setElementValue('be_range_bound', '');
 	
 	msg.textContent = 'no message';
 	msg.style.display = 'none';
-    }
-    
-    function checkBoundEditor ( )
-    {
-	var a = 1;
+	
+	range.style.display = 'none';
     }
 
+    this.clearBoundEditor = clearBoundEditor;
+    
+    function checkBoundEditor ( changed )
+    {
+	var current_id = appstate.bounds.current_id;
+	var current_record = appstate.bounds.lookup2[current_id];
+	var redisplay_bound, redisplay_interval;
+	
+	if ( changed == 'age' )
+	{
+	    var new_age = getElementValue("be_age");
+	    current_record.age = new_age;
+	    redisplay_bound = 1;
+	}
+
+	else if ( changed == 'age_err' )
+	{
+	    var new_age_err = getElementValue("be_age_err");
+	    current_record.ger = new_age_err;
+	    redisplay_bound = 1;
+	}
+
+	else if ( changed == 'fraction' )
+	{
+	    var new_fraction = getElementValue("be_fraction");
+	    current_record.frc = new_fraction;
+	    redisplay_bound = 1;
+	}
+
+	else if ( changed == 'intname' )
+	{
+	    var new_intname = getElementValue("be_intname");
+	    current_record.inm = new_intname;
+	    redisplay_interval = 1;
+	}
+	
+	if ( redisplay_bound )
+	{
+	    var row_selector = '#tsbound_' + current_id.replace(':','\\:');
+	    var new_content = boundAgeBasisContent(current_record.age, current_record);
+	    
+	    $(row_selector).html(new_content);
+	}
+
+	if ( redisplay_interval )
+	{
+	    var row_selector = '#tsint_' + current_id.replace(':', '\\:');
+	    var new_content = intervalRowContent(current_record);
+
+	    $(row_selector).html(new_content);
+	}
+    }
+    
     this.checkBoundEditor = checkBoundEditor;
     
     // OLD STUFF BELOW:
@@ -1378,10 +1479,6 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 		bounds_edit.next_label++;
 	    }
 	}
-	
-	// Now compute the stack of intervals that will be used to generate the display.
-
-	computeIntervalStack();
 	
 	// Now generate the bounds form from the data we received.
 	

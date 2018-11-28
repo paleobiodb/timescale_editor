@@ -34,12 +34,24 @@
     font-size: 1.2em;
 }
 
+.tsed_subbox_header {
+    font-size: 1.1em;
+}
+
+#timescale_content_box {
+    border-collapse: collapse;
+    border: 2px solid black;
+}
+
+.timescale_content_cell {
+    border: 2px solid black;
+}    
+
 #intervals_box {
     display: block;
     max-height: 400px;
     vertical-align: top;
-    border-spacing: 10;
-    border: 2px solid black;
+    overflow: auto;
 }
 
 .tsed_column_container {
@@ -113,10 +125,9 @@
     max-height: 200px;
     vertical-align: middle;
     text-align: left;
-    padding: 10px;
+    padding: 0px;
     border-spacing: 10px;
     border-collapse: separate;
-    border: 2px solid black;
 }
 
 #bound_editor hr {
@@ -214,7 +225,7 @@
 }
 
 #editor {
-    margin:2em 1em 0em 1em;
+    margin:0.5em 1em 0em 1em;
 }
 
 #ts_list,#bounds_pane {
