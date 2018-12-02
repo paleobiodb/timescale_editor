@@ -28,8 +28,8 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     var ts_attrs_pane;
     var bounds_pane;
     
-    var pane_group = { 'ts_attrs_pane': 1, 'bounds_pane': 1, 'intervals_pane': 1,
-		       'edit_attrs': 2, 'edit_bounds': 2, 'edit_intervals': 2 };
+    var pane_group = { 'ts_attrs_pane': 1, 'intervals_pane': 1,
+		       'edit_attrs': 2, 'edit_intervals': 2 };
     
     var init_box;
     var bounds_box;
@@ -47,8 +47,11 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     
     var bound_selector_box;
 
-    var appstate = { timescale_selector: { },
+    var appstate = { current_timescale_id: undefined,
+		     current_timescale_name: '',
+		     timescale_selector: { },
 		     bound_selector: { },
+		     ts_attrs: { },
 		     bounds: { },
 		     intervals: { } };
     
@@ -68,13 +71,23 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     
     // Objects for holding data cached from the API
     
-    var api_data = { };
+    var api_data = { timescales_id: { },
+		     timescale_list: [ ],
+		     timescale_bound_list: { },
+		     bounds_id: { },
+		     bounds_dep: { },
+		     ics_ages: { },
+		     ics_best: { },
+		     refs_id: { } };
     
-    // The following function initializes this application controller object.  It is exported as
-    // a method, so that it can be called once the web page is fully loaded.  It must make two
-    // API calls to get a list of country and continent codes, and geological time intervals.
-    // When both of these calls complete, the "initializing form..." HTML floating element is hidden,
-    // signaling to the user that the application is ready for use.
+    this.api_data = api_data;
+    
+    // The following function initializes this application controller object.  It is exported as a
+    // method, so that it can be called once the web page is fully loaded.  It intializes some of
+    // the user interface elements, and also makes API calls to get a list of timescales and also
+    // the bounds from the ICS timescales.  When both of these calls complete, the "initializing
+    // form..." HTML floating element is hidden, signaling to the user that the application is
+    // ready for use.
     
     function initApp ()
     {
@@ -112,157 +125,56 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 
 	setInnerHTML("be_bound_type", content);
 	
+	clearTimescaleAttrs();
+	
 	// Initiate an API call to fetch necessary data.  This has a callback to handle the data
 	// that comes back, and a failure callback too.
 	
 	$.getJSON(data_url + 'timescales/list.json?all_records&show=desc')
-	    .done(callbackListTimescales)
+	    .done(callback1)
 	    .fail(badInit);
 	
 	$.getJSON(data_url + 'timescales/bounds.json?timescale_id=tsc:1,tsc:2,tsc:3,tsc:4,tsc:5')
-	    .done(callbackListBounds)
+	    .done(callback2)
 	    .fail(badInit);
     }
     
     this.initApp = initApp;
     
-    function callbackListTimescales (response)
+    function callback1 (response)
     {
 	// If no results were received, we're in trouble.  The application can't be used if the
 	// API is not working, so there's no point in proceeding further.
 	
-	if ( ! response.records )
-	    badInit();
+	if ( ! response.records ) return badInit();
 	
-	// Otherwise, store all of the response records in the appropriate array.
+	// Otherwise, store all of the response records and update the appropriate user interface
+	// elements.
 	
-	api_data.timescales = [ ];
-	api_data.timescales_id = { };
-	
-	for ( var i=0; i < response.records.length; i++ )
-	{
-	    var record = response.records[i];
-	    
-	    api_data.timescales.push(record);
-	    api_data.timescales_id[record.oid] = record;
-	}
+	cacheTimescaleData(response.records);
 	
 	// If both API calls are complete, finish the initialization process. 
 	
 	done_config1 = 1;
 	if ( done_config2 ) finishInitApp();
 	
-	refreshTimescales("timescale_selector_timescales", "timescale_selector");
-	refreshTimescales("bound_selector_timescales", "bound_selector");
     }
-    
-    function callbackListBounds (response)
+
+    function callback2 (response)
     {
 	// If no results were received, we're in trouble.  The application can't be used if the
 	// API is not working, so there's no point in proceeding further.
 	
-	if ( ! response.records )
-	    badInit();
+	if ( ! response.records ) return badInit();
+
+	// Otherwise, store all of the response records and update the appropriate user interface
+	// elements.
 	
-	// Otherwise, store all of the response records in the appropriate array.
+	cacheBoundData(response);
 	
-	api_data.bounds_timescale_id = { };
-	api_data.bounds_id = { };
-	api_data.ics_by_age = { };
-	api_data.ics_ages = [ ];
-	api_data.ics_best = { };
-	api_data.bounds_dep = { };
+    	// If both API calls are complete, finish the initialization process. 
 	
-	for ( var i=0; i < response.records.length; i++ )
-	{
-	    var record = response.records[i];
-	    var age = record.age;
-	    var scale_no = international_no[record.sid];
-	    
-	    // Store each bounds record in all of the appropriate arrays.
-	    
-	    record.scale_no = scale_no;
-	    
-	    if ( ! api_data.bounds_timescale_id[record.sid] )
-		api_data.bounds_timescale_id[record.sid] = [ ];
-	    
-	    api_data.bounds_timescale_id[record.sid].push(record);
-	    
-	    api_data.bounds_id[record.oid] = record;
-	    
-	    // Fill in any dependencies.
-	    
-	    if ( record.bid )
-	    {
-		if ( ! api_data.bounds_dep[record.bid] ) api_data.bounds_dep[record.bid] = { };
-		api_data.bounds_dep[record.bid][record.oid] = 1;
-	    }
-	    
-	    if ( record.tid )
-	    {
-		if ( ! api_data.bounds_dep[record.tid] ) api_data.bounds_dep[record.tid] = { };
-		api_data.bounds_dep[record.tid][record.oid] = 1;
-	    }
-	    
-	    if ( record.uid )
-	    {
-		if ( ! api_data.bounds_dep[record.cid] ) api_data.bounds_dep[record.uid] = { };
-		api_data.bounds_dep[record.uid][record.oid] = 1;
-	    }
-	    
-	    if ( record.cid )
-	    {
-		if ( ! api_data.bounds_dep[record.rid] ) api_data.bounds_dep[record.cid] = { };
-		api_data.bounds_dep[record.cid][record.oid] = 1;
-	    }
-	    
-	    // Now fill in the best record for each distinct age in the ICS timescales.
-	    
-	    if ( ! api_data.ics_by_age[age] )
-	    {
-		api_data.ics_ages.push(age);
-		api_data.ics_by_age[age] = [ ];
-	    }
-	    
-	    api_data.ics_by_age[age].push(record);
-	    
-	    if ( age <= 70.0 && scale_no )
-	    {
-		if ( scale_no == 4 )
-		    api_data.ics_best[age] = record;
-		
-		else if ( scale_no == 5 && ! api_data.ics_best[age] )
-		    api_data.ics_best[age] = record;
-	    }
-	    
-	    else if ( scale_no )
-	    {
-		if ( scale_no == 3 )
-		    api_data.ics_best[age] = record;
-		
-		else if ( scale_no > 3 && ! api_data.ics_best[age] )
-		    api_data.ics_best[age] = record;
-		    
-		else if ( scale_no > 3 && scale_no < api_data.ics_best[age].scale_no )
-		    api_data.ics_best[age] = record;
-		
-		else if ( ! api_data.ics_best[age] || scale_no > api_data.ics_best[age].scale_no )
-		    api_data.ics_best[age] = record;
-	    }
-	}
-	
-	// Sort the list of ICS ages.
-	
-	api_data.ics_ages.sort( function(a, b) { return a - b; } );
-	
-	for ( var a in api_data.ics_by_age ) 
-	{
-	    api_data.ics_by_age[a].sort( function(a, b) { return a.scale_no - b.scale_no } );
-	}
-	
-	// If both API calls are complete, finish the initialization process. 
-	
-	done_config1 = 2;
+	done_config2 = 1;
 	if ( done_config1 ) finishInitApp();
     }
     
@@ -272,30 +184,25 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     
     function badInit ( )
     {
-	if ( init_box ) init_box.innerHTML = "<span>Initialization failed!<br>Please contact admin@paleobiodb.org</span>";
+	setElementContent("initmsg", "Initialization failed! Please contact admin@paleobiodb.org");
     }
     
     // This function is called when the configuration API calls are complete.  It hides the
-    // "initializing form, please wait" HTML floating object, and then calls updateFormState to
-    // initialize the various form elements.
+    // "initializing form, please wait" HTML floating object, and then initializes the various
+    // parts of the app.
     
     function finishInitApp ()
     {
-	// // initFormContents();
+	// Remove the initialization message box.
 	
 	init_box.style.display = 'none';
 	
 	// clear timescale attrs form
 	
-	setElementValue('ts_name', '');
-	setElementValue('ts_id', '');
-	setElementValue('ts_min_age', '');
-	setElementValue('ts_max_age', '');
-	setElementValue('ts_extent', '');
-	setElementValue('ts_taxon', '');
+	// clearTimescaleAttrs();
     }
     
-    this.api_data = api_data;
+    // PANE SELECTION
     
     function selectPane ( pane_id, button_id )
     {
@@ -359,6 +266,194 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 
 	return result;
     }
+
+    // API interface
+
+    // Simple function for fetching records.
+    
+    function fetchAPIData ( operation_url, done_function, fail_function )
+    {
+	$.getJSON(data_url + operation_url)
+	    .done(done_function)
+	    .fail(fail_function);
+    }
+    
+    // Cache timescale data in the 'api_data' object where, it can be referred to by the rest of
+    // the application code. The object passed to this function must be an array containing the
+    // attributes of *all* timescales in the database.
+    
+    function cacheTimescaleData ( records )
+    {
+	if ( ! records || records.length == 0 )
+	{
+	    console.log("ERROR: timescale query returned no records");
+	    return;
+	}
+	
+	// Delete all of the old timescale data, since we are replacing it with the most up-to-date query
+	// result.
+	
+	api_data.timescale_list = [ ];
+	api_data.timescales_id = { };
+	
+	// Store the new data in the api_data cache.
+	
+	for ( var i=0; i < records.length; i++ )
+	{
+	    var record = records[i];
+	    
+	    api_data.timescale_list.push(record.oid);
+	    api_data.timescales_id[record.oid] = record;
+	}
+	
+	// Then update the timescale lists in various user interface elements to reflect this
+	// query result.
+	
+	refreshTimescales("timescale_selector_timescales", "timescale_selector");
+	refreshTimescales("bound_selector_timescales", "bound_selector");
+    }
+    
+    // Cache bound data in the 'api_data' object, where it can be referred to by the rest of the
+    // application code. Also fetch any bounds referenced by the cached records, if they are not
+    // already cached. The object passed to this database is assumed to be an array that contains
+    // the attributes of all of the bounds in one or more timescales.
+    
+    function cacheBoundData ( records, completion_function )
+    {
+	if ( ! records || records.length == 0 )
+	{
+	    console.log("ERROR: bound query returned no records");
+	    return;
+	}
+	
+	// Otherwise, store all of the response records in the appropriate variables so that other
+	// functions can access them.
+	
+	// api_data.bounds_timescale_id = { };
+	// api_data.bounds_id = { };
+	// api_data.ics_ages = [ ];
+	// api_data.ics_best = { };
+	
+	// api_data.bounds_dep = { };
+	
+	// First determine which timescales have been queried.
+	
+	var fetched_tsc = { };
+	
+	for ( var i=0; i < records.length; i++ )
+	{
+	    var record = records[i];
+	    if ( record.sid ) fetched_tsc[record.sid] = 1;
+	}
+	
+	// Then delete the cached bound records for these timescales.
+	
+	for ( var sid in fetched_tsc )
+	{
+	    if ( api_data.timescale_bound_list[sid] )
+	    {
+		var list = api_data.timescale_bound_list[sid];
+		
+		for ( var i=0; i < list.length; i++ )
+		{
+		    if ( api_data.bounds_id[list[i]] ) api_data.bounds_id[list[i]] = null;
+		}
+	    }
+	    
+	    api_data.timescale_bound_list[sid] = [ ];
+	    
+	    // temporary debugging message
+	    console.log("FETCHED timescale " + sid);
+	}
+	
+	// Then add the new records to the api_data cache. Keep track of the identifiers of all
+	// referenced bounds.
+	
+	var ref_bounds_id = { };
+	var bad_sid;
+	
+	for ( var i=0; i < records.length; i++ )
+	{
+	    var record = records[i];
+	    var sid = record.sid;
+	    var oid = record.oid;
+
+	    // Ignore any record that doesn't have both an sid field and an oid field. Any record
+	    // that has an oid but no sid triggers a warning.
+	    
+	    if ( ! sid || ! oid )
+	    {
+		if ( oid ) bad_sid = 1;
+		continue;
+	    }
+	    
+	    if ( international_no[record.sid] ) record.scale_no = international_no[record.sid];
+	    
+	    // Store each bounds record in each of the appropriate arrays.
+	    
+	    api_data.timescale_bound_list[sid].push(oid);
+	    api_data.bounds_id[oid] = record;
+	    
+	    // Then record all of the bounds that are referenced by this record.
+	    
+	    if ( record.bid ) ref_bounds_id[record.bid] = 1;
+	    if ( record.tid ) ref_bounds_id[record.tid] = 1;
+	    if ( record.cid ) ref_bounds_id[record.cid] = 1;
+	    if ( record.uid ) ref_bounds_id[record.uid] = 1;
+	}
+	
+	if ( bad_sid )
+	{
+	    window.alert("WARNING: at least one record had a bad or missing timescale id");
+	}
+
+	// Now go through the referenced bounds and check if any of them are not yet loaded. If
+	// so, then load them.
+	
+	var load_list = [ ];
+	
+	for ( var id in ref_bounds_id )
+	{
+	    if ( ! api_data.bounds_id[id] ) load_list.push(id);
+	}
+	
+	if ( load_list.length )
+	{
+	    var id_list = load_list.join(',');
+	    
+	    fetchAPIData(
+
+		'timescales/bounds.json?id=' + id_list,
+
+		function ( response ) {
+		    cacheAdditionalBounds( response.records );
+		    // temporary debugging message
+		    console.log("FETCHED additional bounds: " + id_list);
+		    completion_function();
+		},
+		
+		function ( xhr ) {
+		    console.log("ERROR fetching additional bounds: " + id_list);
+		}
+	    );
+	}
+    }
+    
+    function cacheAdditionalBounds ( records )
+    {
+	if ( records )
+	{
+	    for ( var i=0; i < records.length; i++ )
+	    {
+		var record = records[i];
+		var oid = record.oid;
+
+		api_data.bounds_id[oid] = record;
+	    }
+	}
+    }
+    
+    // MISC $$$
     
     function refreshTimescales ( element_id, modal_id )
     {
@@ -374,15 +469,16 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	var actives = [ ];
 	var others = [ ];
 	
-	for ( var i=0; i < api_data.timescales.length; i++ )
+	for ( var i=0; i < api_data.timescale_list.length; i++ )
 	{
-	    var record = api_data.timescales[i];
+	    var id = api_data.timescale_list[i];
+	    var record = api_data.timescales_id[id];
 	    
 	    if ( ! record.oid ) continue;
 	    
 	    record.tno = Number(record.oid.replace(/^tsc:/, ''));
 	    
-	    if ( record.tno >= 1 && record.tno <= 5 )
+	    if ( record.tno >= 1 && record.tno <= 10 )
 		internationals.push(record);
 	    else if ( record.act )
 		actives.push(record);
@@ -436,192 +532,784 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    else $(this).removeClass("tsed_highlight");
 	});
     }
+
+    // TIMESCALE SELECTION
+
+    // This function is called when the "Open timescale" control is activated.
     
-    function displayBoundsList ( bounds_elt, intervals_elt, timescale_id )
+    function openTimescaleAction ( )
     {
-	bounds_elt.innerHTML = "<tr><td>loading...</td></tr>";
-	intervals_elt.innerHTML = "<tr><td>loading...</td></tr>";
+	// If there are unsaved changes, ask if the user wants to save them. If not, then
+	// abort this action.
+
+	if ( checkTimescaleUnsaved() ) return;
 	
-	var records = api_data.bounds_timescale_id[timescale_id];
+	// Bring up the modal dialog box by which the user can select a timescale. The selection
+	// callback will actually do so. If the user dismisses the dialog box, the current
+	// timescale will be left in place.
 	
-	if ( records && records.length > 0 )
+	var modal_elt = myGetElement("timescale_selector");
+	
+	if ( modal_elt )
 	{
-	    bounds_elt.innerHTML = generateBoundsFormContent( timescale_id, records );
-	    computeIntervalStack();
-	    computeBoundSelect();
-	    updateBoundEditor();
-	    intervals_elt.innerHTML = generateIntervalDisplayContent( );
-	    $("#intervals_box tr").each(function () {
-		$(this).on("click", null, null, boundClick);
-	    });
+	    modal_elt.style.display = "block";
+	    appstate.timescale_selector.choice_callback = function ( id ) {
+		setCurrentTimescale(id);
+		modalClose("timescale_selector");
+	    };
+	}
+    }
+    
+    this.openTimescaleAction = openTimescaleAction;
+    
+    // Set the application to edit the specified timescale.
+    
+    function setCurrentTimescale ( timescale_id )
+    {
+	if ( ! api_data.timescales_id[timescale_id] )
+	{
+	    alert("ERROR: could not find timescale '" + timescale_id + "'");
+	    clearTimescaleAttrs();
+	    clearIntervals();
+	}
+	    
+	var name = api_data.timescales_id[timescale_id].nam;
+	
+	appstate.current_timescale_id = timescale_id;
+	appstate.current_timescale_name = name;
+	
+	setElementContent("ts_name_intervals", name);
+	
+	fetchAPIData(
+	    
+	    'timescales/single.json?show=desc&timescale_id=' + timescale_id,
+	    
+	    function ( response ) {
+		if ( response.records && response.records.length )
+		{
+		    api_data.timescales_id[timescale_id] = response.records[0]
+		    displayTimescaleAttrs(response.records[0]);
+		}
+		
+		else
+		{
+		    clearTimescaleAttrs('error', "could not fetch the attributes of timescale '" + timscale_id + "'");
+		}
+	    },
+	    
+            function ( xhr ) {
+		clearTimescaleAttrs('error', "could not fetch the attributes of timescale '" + timscale_id + "'");
+	    }
+	);
+	
+	fetchAPIData(
+
+	    'timescales/bounds.json?timescale_id=' + timescale_id,
+
+	    function ( response ) {
+		cacheBoundData(response.records, function ( ) {
+		    displayIntervals(timescale_id);
+		});
+	    },
+	    
+	    function ( xhr ) {
+		clearTimescaleIntervals('error', "could not load bounds for timescale '" + timescale_id + "'");
+	    }
+	);
+    }
+    
+    this.setCurrentTimescale = setCurrentTimescale;
+    
+    // This function is called when the "New timescale" control is activated.
+    
+    function newTimescaleAction ( )
+    {
+	// If there are unsaved changes, ask if the user wants to save them. If not, then
+	// abort this action.
+
+	if ( checkTimescaleUnsaved() ) return;
+
+	// Otherwise, clear both the timescale attributes pane and the interval pane.
+	
+	appstate.current_timescale_id = undefined;
+	appstate.current_timescale_name = '';
+	
+	clearIntervals('new');
+	clearBoundEditor('new');
+	clearTimescaleAttrs('new');
+    }
+    
+    this.newTimescaleAction = newTimescaleAction;
+
+    // If either the current timescale attributes or the current timescale intervals are dirty
+    // (have unsaved changes) then return true unless the user clicks "ok" in a "confirm" dialog
+    // box. Return false otherwise.
+    
+    function checkTimescaleUnsaved ( )
+    {
+	if ( appstate.ts_attrs.dirty )
+	{
+	    selectPane('ts_attrs_pane', 'edit_attrs');
+	    var answer = window.confirm("There are unsaved changes to the attributes of timescale '" +
+					appstate.current_timescale_name + "'. Discard them?");
+
+	    if ( ! answer ) return 1;
+	}
+	
+	if ( appstate.intervals.dirty )
+	{
+	    selectPane('intervals_pane', 'edit_intervals');
+	    var answer = window.confirm("There are unsaved changes to the intervals of timescale '" +
+					appstate.current_timescale_name + "'. Discard them?");
+
+	    if ( ! answer ) return 1;
+	}
+
+	return;
+    }
+    
+    // TIMESCALE ATTRS
+
+    // This function is called when the "Delete timescale" control is activated.
+    
+    function deleteTimescaleAction ( )
+    {
+	// First make sure the user really wants to do this.
+
+	var name = appstate.current_timescale_name;
+
+	var answer = window.confirm("Delete timescale '" + name + "'?");
+
+	if ( ! answer ) return;
+	
+	// Call the API to delete the timescale. If the call is rejected because of a caution,
+	// then we need to ask the user whether to proceed.
+	
+	var timescale_id = appstate.current_timescale_id;
+	
+	if ( timescale_id )
+	{
+	    $.getJSON(data_url + 'timescales/delete.json?id=' + timescale_id)
+		.done(function (response) {
+		    clearTimescaleAttrs();
+		    $.getJSON(data_url + 'timescales/list.json?all_records&show=desc')
+			.done(function (response) {
+			    cacheTimescaleData(response.records) });
+		})
+		.fail(checkDeleteTimescale);
+	}
+    }
+    
+    this.deleteTimescaleAction = deleteTimescaleAction;
+
+    function checkDeleteTimescale ( xhr )
+    {
+	var a = 1;
+	
+	// $$$ must fix this
+    }
+    
+    // This function is called when the "Save changes" control is activated.
+    
+    function saveTimescaleAttrsAction ( )
+    {
+	// Do nothing unless the timescale attributes have unsaved changes.
+	
+	if ( ! appstate.ts_attrs.dirty ) return;
+	
+	// Check that we have a non-empty timescale name and type.
+	
+	if ( ! appstate.ts_attrs.nam || appstate.ts_attrs.nam == 'New timescale' )
+	{
+	    window.alert("You must specify a timescale name");
+	    return;
+	}
+
+	if ( ! appstate.ts_attrs.typ )
+	{
+	    window.alert("You must specify a timescale type");
+	    return;
+	}
+	
+	// Now construct a record which will be submitted to the API.
+	
+	var new_record = { _label: "attrs" };
+	
+	if ( appstate.ts_attrs.is_new )
+	{
+	    new_record.timescale_name = appstate.ts_attrs.nam;
+
+	    if ( appstate.ts_attrs.typ != '' )
+		new_record.timescale_type = appstate.ts_attrs.typ;
+
+	    if ( appstate.ts_attrs.ext != '' )
+		new_record.timescale_extent = appstate.ts_attrs.ext;
+
+	    if ( appstate.ts_attrs.txn != '' )
+		new_record.timescale_taxon = appstate.ts_attrs.txn;
+
+	    if ( appstate.ts_attrs.tsc != '' )
+		new_record.timescale_comments = appstate.ts_attrs.tsc;
+	    
+	    if ( appstate.ts_attrs.rid != '' )
+		new_record.reference_id = appstate.ts_attrs.rid;
+	    
+	    new_record.is_visible = appstate.ts_attrs.vis;
+	    new_record.is_enterable = appstate.ts_attrs.enc;
+	    new_record.admin_lock = appstate.ts_attrs.lck;
+
+	    if ( appstate.ts_attrs.pri != '' && appstate.ts_attrs.pri != 0 )
+		new_record.priority = appstate.ts_attrs.pri;
+	}
+	
+	else
+	{
+	    new_record.timescale_id = appstate.current_timescale_id;
+	    
+	    var current = api_data.timescales_id[appstate.current_timescale_id];
+
+	    if ( current == undefined )
+	    {
+		window.alert("ERROR: no timescale id was found");
+		return;
+	    }
+
+	    if ( appstate.ts_attrs.nam != (current.nam || ''))
+		new_record.timescale_name = appstate.ts_attrs.nam;
+	    
+	    if ( appstate.ts_attrs.typ != (current.typ || ''))
+		new_record.timescale_type = appstate.ts_attrs.typ;
+	    
+	    if ( appstate.ts_attrs.ext != (current.ext || ''))
+		new_record.timescale_extent = appstate.ts_attrs.ext;
+	    
+	    if ( appstate.ts_attrs.txn != (current.txn || ''))
+		new_record.timescale_taxon = appstate.ts_attrs.txn;
+	    
+	    if ( appstate.ts_attrs.tsc != (current.tsc || ''))
+		new_record.timescale_comments = appstate.ts_attrs.tsc;
+	    
+	    if ( appstate.ts_attrs.rid != (current.rid || ''))
+		new_record.reference_id = appstate.ts_attrs.rid;
+	    
+	    var current_vis = current.vis ? 1 : 0;
+	    var current_enc = current.enc ? 1 : 0;
+	    var current_lck = current.lck ? 1 : 0;
+	    var current_pri = current.pri ? current.pri : 0;
+
+	    if ( appstate.ts_attrs.vis != current_vis )
+		new_record.is_visible = appstate.ts_attrs.vis;
+
+	    if ( appstate.ts_attrs.enc != current_enc )
+		new_record.is_enterable = appstate.ts_attrs.enc;
+
+	    if ( appstate.ts_attrs.lck != current_lck )
+		new_record.admin_lock = appstate.ts_attrs.lck;
+	    
+	    if ( appstate.ts_attrs.pri != (current.pri || 0) )
+		new_record.priority = appstate.ts_attrs.priority;
+	}
+
+	// Now encode the new record as JSON and send it in the body of an API request.
+	
+        $.ajax({
+	    url: data_url + 'timescales/addupdate.json?show=desc',
+            type: 'PUT',
+            data: JSON.stringify(new_record),
+            contentType: 'application/json; charset=utf-8',
+            dataType: 'json',
+            async: false,
+            success: saveTimescaleAttrsComplete,
+            error: function (xhr, status, errorText) {
+                alert('An error occurred while saving: ' + status + ' ' + errorText);                
+            }});
+
+	// We can stop here when debugging.
+
+	var a = 1;
+    }
+
+    this.saveTimescaleAttrsAction = saveTimescaleAttrsAction;
+    
+    // Complete the save operation.
+
+    function saveTimescaleAttrsComplete ( response )
+    {
+	if ( response && response.records && response.records.length )
+	{
+	    var record = response.records[0];
+	    var timescale_id = record.oid;
+
+	    api_data.timescales_id[timescale_id] = record;
+	    displayTimescaleAttrs(record);
+	}
+	
+    }
+    
+    // This function is called when the "Revert" control is activated.
+    
+    function revertTimescaleAttrsAction ( )
+    {
+	if ( appstate.ts_attrs.is_new )
+	{
+	    clearTimescaleAttrs('new');
+	    return;
+	}
+	
+	else if ( appstate.ts_attrs.dirty )
+	{
+	    selectPane('ts_attrs_pane', 'edit_attrs');
+	    var answer = window.confirm("There are unsaved changes to the attributes of timescale '" +
+					appstate.current_timescale_name + "'. Discard them?");
+
+	    if ( ! answer ) return;
+	}
+	
+	displayTimescaleAttrs(api_data.timescales_id[appstate.current_timescale_id]);
+    }
+
+    this.revertTimescaleAttrsAction = revertTimescaleAttrsAction;
+    
+    function displayTimescaleAttrs ( record )
+    {
+	appstate.ts_attrs = { dirty: 0 };
+	
+	$(document.ts_attrs_form.save).removeClass('tsed_active_save');
+	
+	appstate.ts_attrs.nam = record.nam || '';
+	setElementValue('ts_name', appstate.ts_attrs.nam);
+	
+	appstate.ts_attrs.oid = record.oid || '';
+	setElementValue('ts_id', appstate.ts_attrs.oid);
+	
+	setElementValue('ts_min_age', record.lag != undefined ? record.lag : '');
+	setElementValue('ts_max_age', record.eag != undefined ? record.eag : '');
+	
+	appstate.ts_attrs.ext = record.ext || '';
+	setElementValue('ts_extent', appstate.ts_attrs.ext);
+	
+	appstate.ts_attrs.txn = record.txn || '';
+	setElementValue('ts_taxon', appstate.ts_attrs.txn);
+	
+	appstate.ts_attrs.typ = record.typ || '';
+	setElementValue('ts_type', appstate.ts_attrs.typ);
+
+	appstate.ts_attrs.tsc = record.tsc || '';
+	setElementValue('ts_comments', appstate.ts_attrs.tsc);
+	
+	appstate.ts_attrs.vis = record.vis ? 1 : 0;
+	setElementValue('ts_visible', appstate.ts_attrs.vis);
+	
+	appstate.ts_attrs.enc = record.enc ? 1 : 0;
+	setElementValue('ts_enterable', appstate.ts_attrs.enc);
+	
+	appstate.ts_attrs.lck = record.lck ? 1 : 0;
+	setElementValue('ts_locked', appstate.ts_attrs.lck);
+	
+	appstate.ts_attrs.rid = record.rid || '';
+	setElementValue('ts_refid', appstate.ts_attrs.rid);
+	
+	if ( record.rid ) fetchTimescaleRef(record.rid);
+	else setElementValue('ts_ref', '');
+    }
+    
+    function clearTimescaleAttrs ( arg, message )
+    {
+	appstate.ts_attrs = { dirty: 0 };
+	
+	$(document.ts_attrs_form.save).removeClass('tsed_active_save');
+	
+	setElementValue('ts_name', '');
+	setElementValue('ts_id', '');
+	setElementValue('ts_min_age', '');
+	setElementValue('ts_max_age', '');
+	setElementValue('ts_extent', '');
+	setElementValue('ts_taxon', '');
+	setElementValue('ts_type', '');
+	setElementValue('ts_comments', '');
+	setElementValue('ts_active', '');
+	setElementValue('ts_locked', '');
+	setElementValue('ts_refid', '');
+	setElementValue('ts_ref', '');
+	
+	if ( arg == 'new' )
+	{
+	    setElementValue('ts_name', 'New timescale');
+	    appstate.ts_attrs.is_new = 1;
+	}
+	
+	else if ( arg == 'error' )
+	{
+	    var new_text = 'ERROR ' + (message || 'ERROR: could not fetch timescale attributes');
+	    setElementValue('ts_name', new_text);
+	}
+    }
+    
+    function fetchTimescaleRef ( rid )
+    {
+	if ( api_data.refs_id[rid] )
+	{
+	    displayTimescaleRef(api_data.refs_id[rid]);
 	}
 
 	else
 	{
-	    $.getJSON(data_url + 'timescales/bounds.json?timescale_id=' + timescale_id)
-		.done(function ( response ) { displayBoundsListResult(bounds_elt, intervals_elt,
-								      timescale_id, response.records) })
-		.fail(function ( xhr ) { bounds_elt.innerHTML = "ERROR: could not load bounds"; failSaveBounds(xhr); });
+	    $.getJSON(data_url + 'refs/single.json?show=formatted&id=' + rid)
+		.done(function ( response ) {
+		    api_data.refs_id[rid] = response.records[0];
+		    displayTimescaleRef(response.records[0])
+		})
+		.fail(function ( xhr ) { displayTimescaleRefError(xhr) });
 	}
     }
+    
+    function displayTimescaleRef ( record )
+    {
+	appstate.ts_attrs.ref = record.ref || '';
+	setElementValue('ts_ref', appstate.ts_attrs.ref);
+    }
+
+    function displayTimescaleRefError ( xhr )
+    {
+	setElementValue('ts_ref', "ERROR: not found");
+    }
+    
+    function checkTimescaleAttrs ( )
+    {
+	// Go through the form contents row by row and see if any of the fields have changed.
+	// Highlight any improper values.
+	
+	appstate.ts_attrs.nam = getElementValue('ts_name');
+	appstate.ts_attrs.typ = getElementValue('ts_type');
+	appstate.ts_attrs.ext = getElementValue('ts_extent');
+	appstate.ts_attrs.txn = getElementValue('ts_taxon');
+	appstate.ts_attrs.tsc = getElementValue('ts_comments');
+	appstate.ts_attrs.vis = getElementValue('ts_visible');
+	appstate.ts_attrs.enc = getElementValue('ts_enterable');
+	appstate.ts_attrs.lck = getElementValue('ts_locked');
+	
+	var new_rid = getElementValue('ts_refid');
+	
+	var current = api_data.timescales_id[appstate.current_timescale_id] || { };
+	
+	var current_nam = current.nam || '';
+	var current_typ = current.typ || '';
+	var current_ext = current.ext || '';
+	var current_txn = current.txn || '';
+	var current_tsc = current.tsc || '';
+	var current_rid = current.rid || '';
+	var current_vis = current.vis ? 1 : 0;
+	var current_enc = current.enc ? 1 : 0;
+	var current_lck = current.lck ? 1 : 0;
+	
+	// check for empty timescale name; figure out a mechanism for error display;
+	// on completion, clear the attrs
+
+	appstate.ts_attrs.dirty = 0;
+	
+	if ( appstate.ts_attrs.nam != current_nam )
+	{
+	    appstate.ts_attrs.dirty = 1;
+	}
+	
+	if ( appstate.ts_attrs.typ != current_typ )
+	{
+	    appstate.ts_attrs.dirty = 1;
+	}
+	
+	if ( appstate.ts_attrs.ext != current_ext ||
+	     appstate.ts_attrs.txn != current_txn ||
+	     appstate.ts_attrs.tsc != current_tsc )
+	{
+	    appstate.ts_attrs.dirty = 1;
+	}
+	
+	if ( new_rid != current_rid )
+	{
+	    appstate.ts_attrs.dirty = 1;
+	}
+
+	if ( new_rid != appstate.ts_attrs.rid )
+	{
+	    if ( new_rid ) fetchTimescaleRef(new_rid);
+	    else setElementValue('ts_ref', '');
+
+	    appstate.ts_attrs.rid = new_rid;
+	}
+	
+	if ( appstate.ts_attrs.vis != current_vis ||
+	     appstate.ts_attrs.enc != current_enc ||
+	     appstate.ts_attrs.lck != current_lck )
+	{
+	    appstate.ts_attrs.dirty = 1;
+	}
+		
+	if ( appstate.ts_attrs.dirty )
+	    $(document.ts_attrs_form.save).addClass('tsed_active_save');
+	
+	else
+	    $(document.ts_attrs_form.save).removeClass('tsed_active_save');
+    }
+    
+    this.checkTimescaleAttrs = checkTimescaleAttrs;
+
+    // TIMESCALE INTERVALS 
+
+    // function displayBoundsList ( bounds_elt, intervals_elt, timescale_id )
+    // {
+    // 	bounds_elt.innerHTML = "<tr><td>loading...</td></tr>";
+    // 	intervals_elt.innerHTML = "<tr><td>loading...</td></tr>";
+    // 	return;
+    // 	var id_list = api_data.timescale_bound_list[timescale_id];
+	
+    // 	if ( id_list && id_list.length > 0 )
+    // 	{
+    // 	    bounds_elt.innerHTML = generateBoundsFormContent( timescale_id, id_list );
+    // 	    computeIntervalStack();
+    // 	    computeBoundSelect();
+    // 	    updateBoundEditor();
+    // 	    intervals_elt.innerHTML = generateIntervalDisplayContent( );
+    // 	    $("#intervals_box tr").each(function () {
+    // 		$(this).on("click", null, null, boundClick);
+    // 	    });
+    // 	}
+
+    // 	else
+    // 	{
+    // 	    $.getJSON(data_url + 'timescales/bounds.json?timescale_id=' + timescale_id)
+    // 		.done(function ( response ) { displayBoundsListResult(bounds_elt, intervals_elt,
+    // 								      timescale_id, response.records) })
+    // 		.fail(function ( xhr ) { bounds_elt.innerHTML = "ERROR: could not load bounds"; failSaveBounds(xhr); });
+    // 	}
+    // }
     
     // this.displayBoundsList = displayBoundsList;
     
-    function displayBoundsListResult ( bounds_elt, intervals_elt, timescale_id, records )
-    {
-	if ( records )
-	{
-	    api_data.bounds_timescale_id[timescale_id] = records;
-	    updateBoundsData(records);
+    // function displayBoundsListResult ( bounds_elt, intervals_elt, timescale_id, records )
+    // {
+    // 	if ( records )
+    // 	{
+    // 	    // api_data.bounds_timescale_id[timescale_id] = records;
+    // 	    // updateBoundsData(records);
 	    
-	    bounds_elt.innerHTML = generateBoundsFormContent( timescale_id, records );
-	    computeIntervalStack();
-	    computeBoundSelect();
-	    updateBoundEditor();
-	    intervals_elt.innerHTML = generateIntervalDisplayContent( );
-	    $("#intervals_box tr").each(function () {
-		$(this).on("click", null, null, boundClick);
-	    });
-	}
-	else
-	{
-	    bounds_elt.innerHTML = "<td><tr>ERROR: no records</td></tr>";
-	    intervals_elt.innerHTML = "<td><tr>ERROR: no records</td></tr>";
-	}
-    }
+    // 	    bounds_elt.innerHTML = generateBoundsFormContent( timescale_id, records );
+    // 	    computeIntervalStack();
+    // 	    computeBoundSelect();
+    // 	    updateBoundEditor();
+    // 	    intervals_elt.innerHTML = generateIntervalDisplayContent( );
+    // 	    $("#intervals_box tr").each(function () {
+    // 		$(this).on("click", null, null, boundClick);
+    // 	    });
+    // 	}
+    // 	else
+    // 	{
+    // 	    bounds_elt.innerHTML = "<td><tr>ERROR: no records</td></tr>";
+    // 	    intervals_elt.innerHTML = "<td><tr>ERROR: no records</td></tr>";
+    // 	}
+    // }
 
-    function updateBoundsData ( records )
-    {
-	// Update each bounds record under bounds_id
+    // function updateBoundsData ( records )
+    // {
+    // 	// Update each bounds record under bounds_id
 	
-	for ( var i=0; i < records.length; i++ )
-	{
-	    api_data.bounds_id[records[i].oid] = records[i];
-	}
+    // 	for ( var i=0; i < records.length; i++ )
+    // 	{
+    // 	    api_data.bounds_id[records[i].oid] = records[i];
+    // 	}
 	
-	// Then go through the list again and check to see if any of the bounds this one depends
-	// on are not yet loaded. If so, then load them.
+	// // Then go through the list again and check to see if any of the bounds this one depends
+	// // on are not yet loaded. If so, then load them.
 	
-	var to_load = { };
+	// var to_load = { };
 	
-	for ( var i=0; i < records.length; i++ )
-	{
-	    if ( records[i].bid && ! api_data.bounds_id[records[i].bid] )
-		to_load[records[i].bid] = 1;
+	// for ( var i=0; i < records.length; i++ )
+	// {
+	//     if ( records[i].bid && ! api_data.bounds_id[records[i].bid] )
+	// 	to_load[records[i].bid] = 1;
 	    
-	    if ( records[i].tid && ! api_data.bounds_id[records[i].tid] )
-		to_load[records[i].tid] = 1;
+	//     if ( records[i].tid && ! api_data.bounds_id[records[i].tid] )
+	// 	to_load[records[i].tid] = 1;
 	    
-	    if ( records[i].cid && ! api_data.bounds_id[records[i].cid] )
-		to_load[records[i].tid] = 1;
+	//     if ( records[i].cid && ! api_data.bounds_id[records[i].cid] )
+	// 	to_load[records[i].tid] = 1;
 	    
-	    if ( records[i].fid && ! api_data.bounds_id[records[i].fid] )
-		to_load[records[i].fid] = 1;
-	}
+	//     if ( records[i].fid && ! api_data.bounds_id[records[i].fid] )
+	// 	to_load[records[i].fid] = 1;
+	// }
 	
-	var load_list = [ ];
+	// var load_list = [ ];
 	
-	for ( var id in to_load )
-	{
-	    load_list.push(id);
-	}
+	// for ( var id in to_load )
+	// {
+	//     load_list.push(id);
+	// }
 	
-	if ( load_list.length )
-	{
-	    var id_list = load_list.join(',');
+	// if ( load_list.length )
+	// {
+	//     var id_list = load_list.join(',');
 	    
-	    alert("Need to load following ids: " + id_list);
-	}
-    }
+	//     alert("Need to load following ids: " + id_list);
+	// }
+    // }
 
-    function computeIntervalStack ( )
+    // Display the intervals and bounds for the specified timescale in the intervals pane. This
+    // function assumes that the necessary data has already been fetched and cached in the
+    // api_data object.
+    
+    function displayIntervals ( timescale_id )
     {
-	appstate.bounds.values = bounds_edit.values;
-	appstate.bounds.lookup2 = { };
+	// First grab the list of interval bound ids already cached for the specified timescale.
+	
+	var bound_id_list = api_data.timescale_bound_list[timescale_id];
+	
+	// If we have no interval bounds to display, clear the display pane.
+	
+	if ( ! bound_id_list || bound_id_list.length == 0 )
+	{
+	    clearIntervals();
+	    return;
+	}
+	
+	// Otherwise, clear the application state for the interval editor.
+
+	appstate.intervals = { dirty: 0 };
+	
+	// Otherwise, generate an array of bound records by copying the bound record corresponding
+	// to each id in the list. This array, kept as part of the application state, will keep
+	// track of the locally edited attributes of each bound.
+	
+	appstate.intervals.bounds = [ ];
+	appstate.intervals.bounds_id = { };
+	
+	for ( var i=0; i<bound_id_list.length; i++ )
+	{
+	    var id = bound_id_list[i];
+	    var new_record = $.extend( { }, api_data.bounds_id[id]);
+	    appstate.intervals.bounds.push(new_record);
+	    appstate.intervals.bounds_id[id] = new_record;
+	}
+	
+	// Then organize these bounds into one or more columns of intervals and generate a
+	// list of <option> elements that can be used to select a bound.
+
+	computeIntervalStack();
+	computeBoundSelect();
+	
+	// Then generate the HTML content that will represent the intervals and bounds in this
+	// timescale.
+
+	intervals_box.innerHTML = generateIntervalDisplayContent( );
+
+	// Decorate this content with an onclick handler for each sub-table row.
+	
+	$("#intervals_box tr").each(function () {
+	    $(this).on("click", null, null, boundClick);
+	});
+    }
+    
+    function computeIntervalStack ( ) // $$$
+    {
+	appstate.intervals.intervals = [ ];
+	appstate.intervals.intervals_id = { };
+	
 	appstate.intervals.columns = [ [ ] ];
 	appstate.intervals.column_max = [ 0 ];
-	appstate.intervals.list = [ ];
-	appstate.intervals.lookup = { };
 	
-	var bound_list = appstate.bounds.values;
-	var bound_lookup = appstate.bounds.lookup2;
-	var age_to_bound_id = { };
-	var age_list = [ ];
+	appstate.intervals.ages = [ ];
+	appstate.intervals.age_to_bound_id = { };
+	
+	var bound_list = appstate.intervals.bounds;
+	var bound_lookup = appstate.intervals.bounds_id;
+	var age_to_bound_id = appstate.intervals.age_to_bound_id;
+	var age_list = appstate.intervals.ages;
+	
+	// Map each age to the id of the first bound we find with that age. This will be used to
+	// display the right-hand column of bounds.
 	
 	for ( var i=0; i < bound_list.length; i++ )
 	{
-	    bound_lookup[bound_list[i].oid] = bound_list[i];
-
 	    var age = bound_list[i].age;
 	    age_to_bound_id[age] = age_to_bound_id[age] || bound_list[i].oid;
 	}
+	
+	// Then go through the bounds again. For each bound that is linked to a higher bound
+	// through the uid field, add an interval record to the intervals list. Also add it to one
+	// of the column lists.
 	
 	for ( var i=0; i < bound_list.length; i++ )
 	{
 	    var bottom_id = bound_list[i].oid;
 	    var top_id = bound_list[i].uid;
+	    var age = bound_list[i].age;
 	    var name = bound_list[i].inm || '';
 	    
 	    if ( top_id )
 	    {
-		bound_lookup[bottom_id].top_age = bound_lookup[top_id].age;
+		var top_age = bound_lookup[top_id].age;
+		
+		bound_lookup[bottom_id].top_age = top_age;
 		bound_lookup[bottom_id].upper_name = name;
 		bound_lookup[top_id].lower_name = bound_lookup[top_id].lower_name || [ ];
 		bound_lookup[top_id].lower_name.push(name);
 		bound_lookup[top_id].is_top = 1;
 		
-		addInterval(bottom_id, top_id);
+		var interval = { bottom_id: bottom_id,
+				 top_id: top_id,
+				 bottom_age: age,
+				 top_age: top_age,
+				 name: name };
+		
+		var select_col = selectIntervalColumn(top_age);
+		
+		appstate.intervals.columns[select_col].push(interval);
+		appstate.intervals.column_max[select_col] = age;
+		appstate.intervals.intervals.push(interval);
+		appstate.intervals.intervals_id[bottom_id] = interval;
 	    }
 	}
-
+	
+	// Now make a sorted list of bound ages. 
+	
+	var age_list = [ ];
+	
 	for (var age in age_to_bound_id)
 	    age_list.push(age);
-
+	
 	appstate.intervals.ages = age_list.sort(function (a, b) { return a - b });
-	appstate.intervals.age_to_bound_id = age_to_bound_id;
 	
-	var a = 1;
+	var a = 1;	// we can stop here when debugging
     }
-
-    function addInterval ( bottom_id, top_id )
+    
+    function selectIntervalColumn ( top_age )
     {
-	var columns = appstate.intervals.columns;
-	var column_max = appstate.intervals.column_max;
-	var interval_list = appstate.intervals.list;
-	var interval_lookup = appstate.intervals.lookup;
-	var bound_lookup = appstate.bounds.lookup2;
-	
-	var interval = { bottom_id: bottom_id,
-			 top_id: top_id,
-			 bottom_age: bound_lookup[bottom_id].age,
-			 top_age: bound_lookup[top_id].age,
-			 name: bound_lookup[bottom_id].upper_name,
-		       };
-	
 	var select_col = 0;
 	
-	while ( column_max[select_col] > interval.top_age )
+	while ( appstate.intervals.column_max[select_col] > top_age )
 	{
 	    select_col++;
 	    
-	    if ( columns[select_col] == undefined )
+	    if ( appstate.intervals.columns[select_col] == undefined )
 	    {
-		columns[select_col] = [ ];
-		column_max[select_col] = 0;
+		appstate.intervals.columns[select_col] = [ ];
+		appstate.intervals.column_max[select_col] = 0;
 	    }
 	}
-	
-	columns[select_col].push(interval);
-	column_max[select_col] = interval.bottom_age;
-	interval_list.push(interval);
-	interval_lookup[bottom_id] = interval;
+
+	return select_col;
     }
-
+    
+    function clearIntervals ( arg )
+    {
+	appstate.intervals = { dirty: 0 };
+	
+	intervals_box.innerHTML = '<tr><td height="200px">&nbsp;</td></tr>';
+    }
+    
     // Generate a list of options for the bound select element.
-
+    
     function computeBoundSelect ( )
     {
-	var bound_list = appstate.bounds.values;
+	var bound_list = appstate.intervals.bounds;
 	var option_string = '<option value="">--</option>' + "\n";
 	
 	for ( var i=0; i<bound_list.length; i++ )
@@ -635,7 +1323,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    option_string += option;
 	}
 	
-	appstate.bounds.option_string = option_string;
+	appstate.intervals.option_string = option_string;
     }
     
     // Generate the content for the 'timescale intervals' display pane
@@ -643,7 +1331,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     function generateIntervalDisplayContent ( )
     {
 	var columns = appstate.intervals.columns;
-	var interval_list = appstate.intervals.list;
+	var interval_list = appstate.intervals.intervals;
 	var max_age, min_age;
 	
 	// Constants for computing interval heights
@@ -680,7 +1368,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    // Then determine the height in pixels at which each boundary age in this timescale should be displayed.
 	    // Compute a scale factor to convert interval age ranges to pixels.
 	    
-	    var bound_list = appstate.bounds.values;
+	    var bound_list = appstate.intervals.bounds;
 	    var age_list = appstate.intervals.ages;
 	    var age_to_pixels = { };
 	    var cumulative_height = 0;
@@ -761,7 +1449,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    var ruler_column = '<td class="tsed_column_container"><table class="tsed_ruler_column">' + "\n";
 	    var ages_column = '<td class="tsed_column_container"><table class="tsed_ages_column">' + "\n";
 	    
-	    var bound_lookup = appstate.bounds.lookup2;
+	    var bound_lookup = appstate.intervals.bounds_id;
 	    
 	    // Iterate through each separate age. If multiple boundaries share the same age, the
 	    // information describing the one in the leftmost column will be displayed. If the
@@ -927,6 +1615,8 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 
     function boundLinkContent ( bound_id, range_id )
     {
+	console.log("bound_id = " + bound_id);
+	console.log("api_data.bounds_id[bound_id] = " + api_data.bounds_id[bound_id]);
 	var name = api_data.bounds_id[bound_id].inm;
 
 	if ( ! name && api_data.bounds_id[bound_id].age == "0" )
@@ -978,8 +1668,8 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	if ( row_id.substr(0, 6) == 'tsint_' )
 	{
 	    var bottom_id = row_id.substr(6);
-	    var int_record = appstate.intervals.lookup[bottom_id];
-	    var bounds_record = appstate.bounds.lookup2[bottom_id];
+	    var int_record = appstate.intervals.intervals_id[bottom_id];
+	    var bounds_record = appstate.intervals.bounds_id[bottom_id];
 	    
 	    if ( int_record )
 	    {
@@ -1017,7 +1707,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 		    {
 			appstate.intervals.age_to_bound_id[int_record.top_age] = int_record.top_id;
 			selectUpdateElement('tsbound_' + current_top_id, 'tsbound_' + int_record.top_id,
-					    appstate.bounds.lookup2[int_record.top_id]);
+					    appstate.intervals.bounds_id[int_record.top_id]);
 			
 		    }
 
@@ -1095,19 +1785,19 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    
 	    selectAddElement('tsint_' + bound_id);
 	    
-	    if ( appstate.bounds.lookup2[bound_id] )
+	    if ( appstate.intervals.bounds_id[bound_id] )
 	    {
-		var top_id = appstate.bounds.lookup2[bound_id].uid;
+		var top_id = appstate.intervals.bounds_id[bound_id].uid;
 		
 		if ( ! top_id ) selectRemoveElement('tsint_' + bound_id);
 	    }
 	    
 	    // Now select any intervals that have this bound as their top.
 	    
-	    for ( var i=0; i < appstate.intervals.list.length; i++ )
+	    for ( var i=0; i < appstate.intervals.intervals.length; i++ )
 	    {
-		if ( appstate.intervals.list[i].top_id == bound_id )
-		    selectAddElement('tsint_' + appstate.intervals.list[i].bottom_id);
+		if ( appstate.intervals.intervals[i].top_id == bound_id )
+		    selectAddElement('tsint_' + appstate.intervals.intervals[i].bottom_id);
 	    }
 
 	    // Now fill in the bound editor.
@@ -1151,15 +1841,15 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 
     function updateBoundEditor ( )
     {
-	setInnerHTML("be_top_bound", appstate.bounds.option_string);
+	setInnerHTML("be_top_bound", appstate.intervals.option_string);
     }
     
     function fillBoundEditor ( bound_id )
     {
-	appstate.bounds.current_id = bound_id;
+	appstate.intervals.current_id = bound_id;
 	
 	var msg = myGetElement('bound_editor_msg');
-	var bound_record = appstate.bounds.lookup2[bound_id];
+	var bound_record = appstate.intervals.bounds_id[bound_id];
 	
 	// If the bound record cannot be found for some reason, display a message and clear the
 	// form.
@@ -1191,9 +1881,9 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 
 	var lower = '';
 	
-	for ( var i=0; i < appstate.bounds.values.length; i++ )
+	for ( var i=0; i < appstate.intervals.bounds.length; i++ )
 	{
-	    var record = appstate.bounds.values[i];
+	    var record = appstate.intervals.bounds[i];
 
 	    if ( record.uid && record.uid == bound_id && record.inm && record.inm != '' )
 	    {
@@ -1340,8 +2030,8 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     
     function checkBoundEditor ( changed )
     {
-	var current_id = appstate.bounds.current_id;
-	var current_record = appstate.bounds.lookup2[current_id];
+	var current_id = appstate.intervals.current_id;
+	var current_record = appstate.intervals.bounds_id[current_id];
 	var redisplay_bound, redisplay_interval;
 	
 	if ( changed == 'age' )
@@ -2093,92 +2783,6 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	return undefined;
     }
 
-    function displayTimescaleAttrs ( timescale_id )
-    {
-	$.getJSON(data_url + 'timescales/single.json?show=desc&timescale_id=' + timescale_id)
-	    .done(function ( response ) { displayTimescaleAttrsResult(timescale_id, response.records[0]) })
-	    .fail(function ( xhr ) { window.alert("ERROR: could not load timescale attrs"); });
-    }
-    
-    function displayTimescaleAttrsResult ( timescale_id, record )
-    {
-	api_data.timescales_id[timescale_id] = record;
-	edit_timescale_attrs = { };
-	
-	$(document.ts_attrs_form.save).removeClass('tsed_active_save');
-	
-	setElementValue('ts_name', record.nam || '');
-	setElementValue('ts_id', record.oid || '');
-	setElementValue('ts_min_age', record.lag != undefined ? record.lag : '');
-	setElementValue('ts_max_age', record.eag != undefined ? record.eag : '');
-	setElementValue('ts_extent', record.ext || '');
-	setElementValue('ts_taxon', record.txn || '');
-	setElementValue('ts_type', record.typ || '');
-    }
-    
-    function checkTimescaleAttrs ( )
-    {
-	// Go through the form contents row by row and see if any of the fields have changed.
-	// Highlight any improper values.
-	
-	var new_name = getElementValue('ts_name');
-	var new_type = getElementValue('ts_type');
-	var new_extent = getElementValue('ts_extent');
-	var new_taxon = getElementValue('ts_taxon');
-	var new_comments = getElementValue('ts_comments');
-	var new_type = getElementValue('ts_type');
-	
-	var current = api_data.timescales_id[edit_timescale_id];
-	
-	var current_name = current.nam || '';
-	var current_type = current.typ || '';
-	var current_extent = current.ext || '';
-	var current_taxon = current.txn || '';
-	var current_comments = current.tsc || '';
-	var current_type = current.typ || '';
-	
-	// check for empty timescale name; figure out a mechanism for error display;
-	// on completion, clear the attrs
-	
-	edit_timescale_attrs = { };
-	
-	if ( new_name != current_name ) edit_timescale_attrs.timescale_name = new_name;
-	if ( new_type != current_type ) edit_timescale_attrs.timescale_type = new_type;
-	if ( new_extent != current_extent ) edit_timescale_attrs.timescale_extent = new_extent;
-	if ( new_taxon != current_taxon ) edit_timescale_attrs.timescale_taxon = new_taxon;
-	if ( new_comments != current_comments ) edit_timescale_attrs.timescale_comments = new_comments;
-	if ( new_type != current_type ) edit_timescale_attrs.timescale_type = new_type;
-	
-	if ( _.size(edit_timescale_attrs) )
-	    $(document.ts_attrs_form.save).addClass('tsed_active_save');
-	
-	else
-	    $(document.ts_attrs_form.save).removeClass('tsed_active_save');
-    }
-    
-    this.checkTimescaleAttrs = checkTimescaleAttrs;
-    
-    function saveTimescaleAttrs ( )
-    {
-	// If we have a record ready to send to the server, send it.
-	
-	if ( _.size(edit_timescale_attrs) )
-	{
-	    var update_data = '[' + JSON.stringify(edit_timescale_attrs) + ']';
-	    
-	    $.ajax({
-		url: data_url + 'timescales/update.json?timescale_id=' + edit_timescale_id,
-		type: 'PUT',
-		data: update_data,
-		contentType: 'application/json; charset=utf-8',
-		dataType: 'json' })
-	    	.done(function ( response ) { displayTimescaleAttrsResult(edit_timescale_id, response.records[0]) })
-	    	.fail(failSaveBounds);
-	}
-    }
-    
-    this.saveTimescaleAttrs = saveTimescaleAttrs;
-    
     function chooseLinkBound ( which, i )
     {
 	var current_bound_id;
@@ -2216,35 +2820,6 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     
     this.chooseLinkBound = chooseLinkBound;
 
-    function openTimescale ( )
-    {
-	var modal_elt = myGetElement("timescale_selector");
-
-	if ( modal_elt )
-	{
-	    modal_elt.style.display = "block";
-	    appstate.timescale_selector.choice_callback = function ( id ) {
-		setTimescale(id);
-		modalClose("timescale_selector");
-	    };
-	}
-    }
-    
-    this.openTimescale = openTimescale;
-    
-    function setTimescale ( id )
-    {
-	appstate.current_timescale = id;
-	displayBoundsList(bounds_box, intervals_box, id);
-	displayTimescaleAttrs(id);
-
-	var name = api_data.timescales_id[id].nam;
-	var t1 = myGetElement("ts_name_intervals");
-	if ( t1 ) t1.textContent = name;
-	var t2 = myGetElement("ts_name_bounds");
-	if ( t2 ) t2.textContent = name;
-    }
-    
     function openBoundSelector ( current_timescale_id, current_bound_id, callback )
     {
 	var modal_elt = myGetElement("bound_selector");
