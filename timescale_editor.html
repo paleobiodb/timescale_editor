@@ -51,6 +51,9 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
   Initializing form, please wait...</span>
 </div>
 
+<!-- This section defines the mane editing pane, which is divided into two subpanes: one for -->
+<!-- editing timescale attributes, and one for the intervals and interval boundaries. -->
+
 <div name="editor" id="editor">
   <table border="1" width="100%">
     <tr>
@@ -58,20 +61,12 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
       	<div align="center">
   	  <div align="center" class="col-sm-6" id="edit_attrs"
 	    onclick="tsapp.selectPane('ts_attrs_pane', 'edit_attrs')">Timescale attributes</div>
-	  <!-- <div align="center" class="col-sm-4" id="edit_bounds"
-	    onclick="tsapp.selectPane('bounds_pane', 'edit_bounds')">Bounds</div> -->
 	  <div align="center" class="col-sm-6" id="edit_intervals"
 	    onclick="tsapp.selectPane('intervals_pane', 'edit_intervals')">Intervals</div>
 		</div>
       </td>
     </tr>
     <tr>
-      <!-- <td id="ts_list" style="vertical-align: top; height:500px;"> -->
-      <!-- 		<div style="max-height: 500px; overflow: auto;"> -->
-      <!-- 			<table id="timescales_box" border="1"> -->
-      <!-- 			</table> -->
-      <!-- 		</div> -->
-      <!-- </td> -->
       <td id="ts_attrs_pane" style="vertical-align: top; display: none">
 	<form id="ts_attrs_form" name="ts_attrs_form">
 	    <div class="btn-holder">
@@ -120,26 +115,8 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
 	</table>
 	</form>
 	</td>
-      <td id="bounds_pane" style="vertical-align: top; height: 500px; display: none">
-      	<form id="bounds_form" name="bounds_form">
-      	    <h3 class="tsed_box_header" id="ts_name_bounds"></h3>
-      	    <div class="btn-holder">
-      	      <input type="button" class="btn" name="open" value="Open timescale"
-		onclick="tsapp.openTimescaleAction()">
-      	      <input type="button" class="btn" name="save" value="Save changes"
-		onclick="tsapp.saveBoundsForm()">
-      	      <input type="reset" class="btn" name="reset" value="Reset">
-      	    </div>
-      		<table id="bounds_box_header"><tbody><tr>
-      			<td>Interval bounds</td>
-      			<td style="text-align: right;">Based on</td>
-      		</tr></tbody></table>
-      	  <div style="max-height: 500px; overflow: auto">
-      	    <table id="bounds_box" border="1" style="margin-top: 20px;">
-      	    </table></div>
-      	  </form>
-      	 </td>
       <td id="intervals_pane" style="vertical-align: top; height: 500px; display: none">
+	<form id="intervals_form" name="intervals_form">
 	    <h3 class="tsed_box_header" id="ts_name_intervals"></h3>
 	    <div class="btn-holder">
 	      <input type="button" class="btn" name="open" value="Open timescale"
@@ -151,20 +128,19 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
 	      <input type="button" class="btn" name="export" value="Export intervals"
 		onclick="tsapp.exportIntervalsAction()">
 	      <input type="button" class="btn" name="revert" value="Revert"
-		onclick="tsapp.revertIntervals()">
+		onclick="tsapp.revertIntervalsAction()">
 	    </div>
 	    <table id="timescale_content_box" width="100%">
 	      <tr><td class="timescale_content_cell">
 		<table id="intervals_box" width="100%"><tr><td height="200px">&nbsp;</td></tr></table>
 	      </td></tr>
 	      <tr><td class="timescale_content_cell">
-		<form id="intervals_form" name="intervals_form">
 		<table id="bound_editor">
 		  <tr>
 		    <td colspan="3" style="text-align: center"><div id="be_title" class="tsed_subbox_header"></div></tr>
 		  <tr>
 		    <td>Next&nbsp;up:</td>
-		    <td><select id="be_top_bound" onchange="tsapp.checkBoundEditor('top_bound')"></div></td>
+		    <td><select id="be_top_bound" onchange="tsapp.checkBoundEditor('top_bound')"></select></td>
 		    <td><div id="bound_editor_msg" style="display: none"></div></td></tr>
 		  <tr>
 		    <td width="5%">
@@ -178,17 +154,23 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
 		      <input id="be_age" type="text" size="8" onchange="tsapp.checkBoundEditor('age')"> &plusmn;
 		      <input id="be_age_err" type="text" size="5" onchange="tsapp.checkBoundEditor('age_err')"> &nbsp;
 		      <img id="be_spike" class="tsed_spike" width="20" height="20"/> &nbsp; &nbsp;
-		      <select id="be_bound_type" onchange="tsapp.checkBoundEditor('bound_type')">
+		      <select id="be_bound_type" onchange="tsapp.checkBoundEditor('type')">
 			<option value="">--</option>
 		      </select> &nbsp;
-		      <div id="be_base_bound" style="display: inline" class="tsed_timescale_label"
-			onclick="tsapp.checkBoundEditor('base_bound')">&nbsp;</div> &nbsp;
-		      <div id="be_range_bound" style="display: inline" class="tsed_timescale_label"
-			onclick="tsapp.checkBoundEditor('range_bound')">&nbsp;</div> &nbsp;
-		      <input id="be_fraction" style="display: none" type="text" size="8"
-			onchange="tsapp.checkBoundEditor('fraction')"> &nbsp;</td></tr>
+		      <select id="be_bound_link" onchange="tsapp.checkBoundEditor('link')">
+			<option value="">--</option>
+		      </select> &nbsp;
+		      <!-- <div id="be_range_bound" style="display: inline" class="tsed_timescale_label" -->
+		      <!-- 	onclick="tsapp.checkBoundEditor('bounds')">&nbsp;</div> &nbsp; -->
+		      <input id="be_fraction" type="text" size="8"
+			onchange="tsapp.checkBoundEditor('fraction')"> &nbsp;
+		      <div class="btn-holder" style="float: right">
+			<input type="button" class="btn" name="redisplay" value="Redisplay"
+				onclick="tsapp.redisplayIntervalsAction()"/></div>
+		    </td></tr>
 		</table>
-	      </form></td></tr></table>
+	      </td></tr></table>
+	 </form>
       </td></tr>
     </table>
 </div>
@@ -201,8 +183,8 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
   <div class="tsed_modal_content" style="height: 500px">
     <span class="close" onclick="tsapp.modalClose('timescale_selector')">&times;</span>
     <h3>Select a timescale:</h3>
-    <table id="timescale_selector_timescales"
-	   style="display: block; height: 400px; overflow: scroll; text-align: left">
+    <input id="tsel_input" type="text" size="1" onkeydown="tsapp.openTimescaleKeypress('timescale_selector', event)">
+    <table id="timescale_selector_timescales" style="display: block; height: 400px; overflow: scroll; text-align: left">
     </table>
   </div>
 
@@ -226,8 +208,52 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
 
 </div>
 
+<!-- The following modal dialog box is used to for adding new intervals to a timescale. -->
 
+<div id="add_intervals" class="tsed_modal">
 
+  <div class="tsed_modal_content" style="height: 500px">
+    <span class="close" onclick="tsapp.modalClose('add_intervals')">&times;</span>
+    <h3 class="tsed_box_header" id="ts_name_add_intervals">Add Intervals</h3>
+    <table id="add_intervals_box" style="display: block; height: 450px; overflow: auto">
+      <thead>
+	<tr style="vertical-align: top; height: 30px"><td>Interval names</td><td>Boundary ages</td></tr>
+      </thead><tbody>
+	<tr><td></td>
+	    <td><input type="text" id="ia_age_0" size="8" class="tsed_add_age"/> &nbsp;&nbsp;
+	        <select id="ia_select_0" onchange="tsapp.addIntervalsSelectAge(0)" class="tsed_add_age">
+	        </select></td></tr>
+	<tr><td><input type="text" id="ia_name_1" size="30" class="tsed_add_interval"/></td>
+	    <td><input type="text" id="ia_age_1" size="8" class="tsed_add_age"/></td></tr>
+	<tr><td><input type="text" id="ia_name_2" size="30" class="tsed_add_interval"/></td>
+	    <td><input type="text" id="ia_age_2" size="8" class="tsed_add_age"/></td></tr>
+	<tr><td><input type="text" id="ia_name_3" size="30" class="tsed_add_interval"/></td>
+	    <td><input type="text" id="ia_age_3" size="8" class="tsed_add_age"/></td></tr>
+	<tr><td><input type="text" id="ia_name_4" size="30" class="tsed_add_interval"/></td>
+	    <td><input type="text" id="ia_age_4" size="8" class="tsed_add_age"/></td></tr>
+	<tr><td><input type="text" id="ia_name_5" size="30" class="tsed_add_interval"/></td>
+	    <td><input type="text" id="ia_age_5" size="8" class="tsed_add_age"/></td></tr>
+	<tr><td><input type="text" id="ia_name_6" size="30" class="tsed_add_interval"/></td>
+	    <td><input type="text" id="ia_age_6" size="8" class="tsed_add_age"/></td></tr>
+	<tr><td><input type="text" id="ia_name_7" size="30" class="tsed_add_interval"/></td>
+	    <td><input type="text" id="ia_age_7" size="8" class="tsed_add_age"/></td></tr>
+	<tr><td><input type="text" id="ia_name_8" size="30" class="tsed_add_interval"/></td>
+	    <td><input type="text" id="ia_age_8" size="8" class="tsed_add_age"/></td></tr>
+	<tr><td><input type="text" id="ia_name_9" size="30" class="tsed_add_interval"/></td>
+	    <td><input type="text" id="ia_age_9" size="8" class="tsed_add_age"/></td></tr>
+	<tr><td><input type="text" id="ia_name_10" size="30" class="tsed_add_interval/"></td>
+	    <td><input type="text" id="ia_age_10" size="8" class="tsed_add_age"/></td></tr>
+	<tr><td class="btn-holder">
+	  <input type="button" class="btn" name="save" value="Save"
+		onclick="tsapp.addIntervalsSaveAction()"/>
+	  <input type="button" class="btn" name="cancel" value="Cancel"
+	        onclick="tsapp.modalClose('add_intervals')"/>
+	  &nbsp;&nbsp;
+	  <input type="button" class="btn" name="clear" value="Clear form"
+		onclick="tsapp.addIntervalsClearAction()"/>
+	  </td><td></tr></tr>
+      </tbody>
+    </table>
+  </div>
 
-
-
+</div>

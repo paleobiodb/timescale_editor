@@ -125,6 +125,10 @@ textarea.tsed_attr_field {
     font-weight: bold;
 }
 
+#tsel_input {
+    border: 0px;
+}
+
 #bound_editor {
     font-size: 0.8em;
     max-height: 200px;
@@ -133,6 +137,7 @@ textarea.tsed_attr_field {
     padding: 0px;
     border-spacing: 10px;
     border-collapse: separate;
+    overflow: auto;
 }
 
 #bound_editor hr {
@@ -148,23 +153,9 @@ textarea.tsed_attr_field {
     font-size: 0.9em;
 }
 
-.tsed_spike {
+.tsed_indicator {
     position: relative;
 }
-
-
-/* .tsed_mark_age { */
-/*     position: relative; */
-/*     left: 20px; */
-/*     top: 10px; */
-/* } */
-
-/* .tsed_first_age { */
-/*     font-size: 0.8em; */
-/*     position: relative; */
-/*     left: 20px; */
-/*     top: -8px; */
-/* } */
 
 .tsed_top_label {
     color: #AD2800;
@@ -172,11 +163,9 @@ textarea.tsed_attr_field {
     border: 1px solid #AD2800;
 }
 
-
 .tsed_top_ref {
     padding: 3px;
 }
-
 
 .tsed_timescale_label {
     background-color: rgba(207, 185, 185, 0.6);
@@ -191,6 +180,21 @@ textarea.tsed_attr_field {
 .tsed_bounds_row td {
     padding: 10px;
     vertical-align: bottom
+}
+
+#add_intervals {
+    font-size: 0.9em;
+    text-align: left;
+}
+
+.tsed_add_interval {
+    padding: 3px;
+}
+
+.tsed_add_age {
+    position: relative;
+    left: 10px;
+    top: 18px;
 }
 
 .tsed_modal {
