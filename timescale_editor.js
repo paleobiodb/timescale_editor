@@ -32,7 +32,6 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 		       'edit_attrs': 2, 'edit_intervals': 2 };
     
     var init_box;
-    var bounds_box;
     var intervals_box;
     var ts_attrs_box;
     var bound_selector_bounds_box;
@@ -48,11 +47,14 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     var bound_selector_box;
 
     var valid_age = /^([0-9]+|[0-9]+[.][0-9]*)$/;
+    var valid_frac = /^(0|0?[.][0-9]*)$/;
+    var has_digit = /[0-9]/;
     
     var appstate = { current_timescale_id: undefined,
 		     current_timescale_name: '',
 		     timescale_selector: { },
 		     bound_selector: { },
+		     add_intervals: { },
 		     ts_attrs: { },
 		     bounds: { },
 		     intervals: { } };
@@ -100,7 +102,6 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	selectPane('ts_attrs_pane', 'edit_attrs');
 	
 	init_box = myGetElement("db_initmsg");
-	bounds_box = myGetElement("bounds_box");
 	intervals_box = myGetElement("intervals_box");
 	bound_selector_box = myGetElement("bound_selector");
 	bound_selector_bounds_box = myGetElement("bound_selector_bounds")
@@ -128,6 +129,11 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 				    'same', 'same as', 'fraction', 'modeled as' ] );
 
 	setInnerHTML("be_bound_type", content);
+
+	content = makeOptionList( [ '', '--', '0', '0', '1', '1', '2', '2', '3', '3', '4', '4',
+				    '5', '5', '6', '6', '7', '7', '8', '8', '9', '9', '10', '10' ] );
+
+	setInnerHTML("ts_priority", content);
 	
 	clearTimescaleAttrs();
 	
@@ -344,7 +350,8 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     {
 	if ( ! records || records.length == 0 )
 	{
-	    console.log("ERROR: bound query returned no records");
+	    // console.log("ERROR: bound query returned no records");
+	    if ( completion_function ) completion_function();
 	    return;
 	}
 	
@@ -389,9 +396,12 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	}
 	
 	// Then add the new records to the api_data cache. Keep track of the identifiers of all
-	// referenced bounds.
+	// referenced bounds. Also compute a lower name for each bound that is the upper bound for
+	// some interval.
 	
 	var ref_bounds_id = { };
+	var lower_name = { };
+	var min_age;
 	var bad_sid;
 	
 	for ( var i=0; i < records.length; i++ )
@@ -422,13 +432,35 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    if ( record.tid ) ref_bounds_id[record.tid] = 1;
 	    if ( record.cid ) ref_bounds_id[record.cid] = 1;
 	    if ( record.uid ) ref_bounds_id[record.uid] = 1;
+
+	    // Finally, if this bound is the bottom of a named interval, store that name in
+	    // conjunction with the upper bound. If more than one interval has the same upper
+	    // bound, just store the first one.
+
+	    if ( record.inm && record.uid && ! lower_name[record.uid] ) lower_name[record.uid] = record.inm;
+
+	    // Also keep track of the minimum age.
+
+	    if ( min_age == undefined || record.age < min_age ) min_age = record.age;
 	}
+
+	// Now go back and fill in the lower names. Also set an 'is_top' flag on the first record
+	// we come to that has the minimum age.
+	
+	for ( i=0; i < records.length; i++ )
+	{
+	    var record = records[i];
+	    if ( record.oid && lower_name[record.oid] ) record.one_lower = lower_name[record.oid];
+	    if ( record.age == min_age ) record.is_top = 1;
+	}
+	
+	// Report to the user if any records lacked an sid. This is an indication of something going seriously wrong.
 	
 	if ( bad_sid )
 	{
 	    window.alert("WARNING: at least one record had a bad or missing timescale id");
 	}
-
+	
 	// Now go through the referenced bounds and check if any of them are not yet loaded. If
 	// so, then load them.
 	
@@ -491,7 +523,6 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	}
 	
 	var internationals = [ ];
-	// var actives = [ ];
 	var others = [ ];
 	var first_letter_select = { };
 	
@@ -506,30 +537,23 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    
 	    if ( record.tno >= 1 && record.tno <= 10 )
 		internationals.push(record);
-	    // else if ( record.act )
-	    // 	actives.push(record);
 	    else
 		others.push(record);
 	}
 	
 	internationals.sort( function(a, b) { return a.tno - b.tno } );
-	// actives.sort( function(a, b) { return a.nam && b.nam ? a.nam.localeCompare(b.nam)
-	// 				   : a.nam ? a.nam : b.nam; } );
 	others.sort( function(a, b) { return a.nam && b.nam ? a.nam.localeCompare(b.nam)
 					   : a.nam ? a.nam : b.nam; } );
 
-	var selector_expr = "tsapp.modalChoice('" + modal_id + "','%oid')";
+	// var selector_expr = "tsapp.modalChoice('" + modal_id + "','%oid')";
 	var content = "";
 	
 	for ( var i=0; i < internationals.length; i++ )
-	    content += generateTableLine(internationals[i], selector_expr);
-	
-	// for ( var i=0; i < actives.length; i++ )
-	//     content += generateTableLine(actives[i], selector_expr);
+	    content += generateTimescaleTableRow(internationals[i], modal_id);
 	
 	for ( var i=0; i < others.length; i++ )
 	{
-	    content += generateTableLine(others[i], selector_expr);
+	    content += generateTimescaleTableRow(others[i], modal_id);
 
 	    var letter = others[i].nam.slice(0,1).toUpperCase();
 	    if ( ! first_letter_select[letter] ) first_letter_select[letter] = others[i].oid;
@@ -539,12 +563,25 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	appstate[modal_id].first_letter_select = first_letter_select;
     }
     
-    function generateTableLine ( record, onclick_expr )
+    function generateTimescaleTableRow ( record, modal_id )
     {
-	return "<tr><td title=\"" + record.oid + "\" onclick=\"" +
-	    onclick_expr.replace('%oid', record.oid) + "\">" + record.nam + "</td></tr>\n";
+	return '<tr><td title="' + record.oid + '" onclick="tsapp.modalChoice(\'' + modal_id +
+	    '\', \'' + record.oid + '\', \'timescale\')">' + record.nam + "</td></tr>\n";
     }
-    
+
+    function generateBoundTableRow ( record, modal_id )
+    {
+	var content = record.age + ' - ';
+	
+	if ( record.inm ) content += record.inm;
+	else if ( record.is_top ) content += ' - top of timescale';
+	else if ( record.one_lower ) content += ' - top of ' + record.one_lower;
+	else content += ' - ' + record.oid;
+	
+	return '<tr><td title="' + record.oid + '" onclick="tsapp.modalChoice(\'' + modal_id +
+	    '\', \'' + record.oid + '\', \'bound\')">' + content + "</td></tr>\n";
+    }
+
     // function selectTimescale ( timescale_id )
     // {
     // 	edit_timescale_id = timescale_id;
@@ -587,7 +624,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	{
 	    modal_elt.style.display = "block";
 	    if ( input_elt ) { input_elt.value = ''; input_elt.focus(); }
-	    appstate.timescale_selector.choice_callback = function ( id ) {
+	    appstate.timescale_selector.choice_callback = function ( id, type ) {
 		modalClose("timescale_selector");
 		setCurrentTimescale(id);
 	    };
@@ -692,9 +729,9 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	appstate.current_timescale_id = undefined;
 	appstate.current_timescale_name = '';
 	
-	clearIntervals('new');
-	clearBoundEditor('new');
 	clearTimescaleAttrs('new');
+	clearIntervals('new');
+	clearBoundEditor();
     }
     
     this.newTimescaleAction = newTimescaleAction;
@@ -754,13 +791,13 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 			.done(function (response) {
 			    cacheTimescaleData(response.records) });
 		})
-		.fail(checkDeleteTimescale);
+		.fail(fallbackDeleteTimescale);
 	}
     }
     
     this.deleteTimescaleAction = deleteTimescaleAction;
 
-    function checkDeleteTimescale ( xhr )
+    function fallbackDeleteTimescale ( xhr )
     {
 	var a = 1;
 	
@@ -865,15 +902,17 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 		new_record.admin_lock = appstate.ts_attrs.lck;
 	    
 	    if ( appstate.ts_attrs.pri != (current.pri || 0) )
-		new_record.priority = appstate.ts_attrs.priority;
+		new_record.priority = appstate.ts_attrs.pri;
 	}
 
 	// Now encode the new record as JSON and send it in the body of an API request.
+
+	var new_record_json = JSON.stringify(new_record);
 	
         $.ajax({
 	    url: data_url + 'timescales/addupdate.json?show=desc',
             type: 'PUT',
-            data: JSON.stringify(new_record),
+            data: new_record_json,
             contentType: 'application/json; charset=utf-8',
             dataType: 'json',
             async: false,
@@ -899,6 +938,12 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 
 	    api_data.timescales_id[timescale_id] = record;
 	    displayTimescaleAttrs(record);
+
+	    if ( ! appstate.current_timescale_id )
+	    {
+		appstate.current_timescale_id = record.oid;
+		appstate.current_timescale_name = record.nam;
+	    }
 	}	
     }
     
@@ -961,6 +1006,9 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	
 	appstate.ts_attrs.lck = record.lck ? 1 : 0;
 	setElementValue('ts_locked', appstate.ts_attrs.lck);
+
+	appstate.ts_attrs.pri = record.pri || 0;
+	setElementValue('ts_priority', appstate.ts_attrs.pri);
 	
 	appstate.ts_attrs.rid = record.rid || '';
 	setElementValue('ts_refid', appstate.ts_attrs.rid);
@@ -977,21 +1025,23 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	
 	setElementValue('ts_name', '');
 	setElementValue('ts_id', '');
+	setElementValue('ts_visible', 0);
+	setElementValue('ts_enterable', 0);
+	setElementValue('ts_locked', 0);
+	setElementValue('ts_priority', '');
 	setElementValue('ts_min_age', '');
 	setElementValue('ts_max_age', '');
 	setElementValue('ts_extent', '');
 	setElementValue('ts_taxon', '');
 	setElementValue('ts_type', '');
 	setElementValue('ts_comments', '');
-	setElementValue('ts_visible', 0);
-	setElementValue('ts_enterable', 0);
-	setElementValue('ts_locked', 0);
 	setElementValue('ts_refid', '');
 	setElementValue('ts_ref', '');
 	
 	if ( arg == 'new' )
 	{
 	    setElementValue('ts_name', 'New timescale');
+	    setElementValue('ts_priority', '0');
 	    appstate.ts_attrs.is_new = 1;
 	}
 	
@@ -1044,6 +1094,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	appstate.ts_attrs.vis = getElementValue('ts_visible');
 	appstate.ts_attrs.enc = getElementValue('ts_enterable');
 	appstate.ts_attrs.lck = getElementValue('ts_locked');
+	appstate.ts_attrs.pri = getElementValue('ts_priority');
 	
 	var new_rid = getElementValue('ts_refid');
 	
@@ -1058,6 +1109,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	var current_vis = current.vis ? 1 : 0;
 	var current_enc = current.enc ? 1 : 0;
 	var current_lck = current.lck ? 1 : 0;
+	var current_pri = current.pri || 0;
 	
 	// check for empty timescale name; figure out a mechanism for error display;
 	// on completion, clear the attrs
@@ -1096,7 +1148,8 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	
 	if ( appstate.ts_attrs.vis != current_vis ||
 	     appstate.ts_attrs.enc != current_enc ||
-	     appstate.ts_attrs.lck != current_lck )
+	     appstate.ts_attrs.lck != current_lck ||
+	     appstate.ts_attrs.pri != current_pri )
 	{
 	    appstate.ts_attrs.dirty = 1;
 	}
@@ -1132,16 +1185,19 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	
 	appstate.intervals.bounds = [ ];
 	appstate.intervals.bounds_id = { };
-	
-	for ( var i=0; i<bound_id_list.length; i++ )
+
+	if ( bound_id_list && bound_id_list.length )
 	{
-	    var id = bound_id_list[i];
-	    var new_record = $.extend( { }, api_data.bounds_id[id]);
-	    appstate.intervals.bounds.push(new_record);
-	    appstate.intervals.bounds_id[id] = new_record;
+	    for ( var i=0; i<bound_id_list.length; i++ )
+	    {
+		var id = bound_id_list[i];
+		var new_record = $.extend( { }, api_data.bounds_id[id]);
+		appstate.intervals.bounds.push(new_record);
+		appstate.intervals.bounds_id[id] = new_record;
+	    }
 	}
     }
-
+    
     function displayIntervals ( )
     {
 	// If we have no interval bounds to display, clear the display pane.
@@ -1149,6 +1205,8 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	if ( ! appstate.intervals.bounds || appstate.intervals.bounds.length == 0 )
 	{
 	    clearIntervals();
+	    computeBoundSelect();
+	    updateOtherPanes();
 	    return;
 	}
 	
@@ -1289,6 +1347,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     function clearIntervals ( arg )
     {
 	appstate.intervals = { dirty: 0 };
+	appstate.intervals.bound_options = '';
 	
 	intervals_box.innerHTML = '<tr><td height="200px">&nbsp;</td></tr>';
     }
@@ -1308,25 +1367,28 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	var option_string = '';
 	
 	// Add one option for each bound in this timescale.
-	
-	for ( var i=0; i<bound_list.length; i++ )
+
+	if ( bound_list && bound_list.length )
 	{
-	    var option = '<option value="' + bound_list[i].oid + '">' +	bound_list[i].age + ' (';
-
-	    // If the bound has an interval name, use that. If it is the top bound for the entire
-	    // timescale, indicate that. Otherwise, use the bound id.
-	    
-	    if ( bound_list[i].inm )
-		option += bound_list[i].inm;
-
-	    else if ( bound_list[i].oid == appstate.intervals.top_bound_id )
-		option += 'top of timescale';
-	    
-	    else
-		option += bound_list[i].oid;
-	    
-	    option += ")</option>\n";
-	    option_string += option;
+	    for ( var i=0; i<bound_list.length; i++ )
+	    {
+		var option = '<option value="' + bound_list[i].oid + '">' +	bound_list[i].age + ' (';
+		
+		// If the bound has an interval name, use that. If it is the top bound for the entire
+		// timescale, indicate that. Otherwise, use the bound id.
+		
+		if ( bound_list[i].inm )
+		    option += bound_list[i].inm;
+		
+		else if ( bound_list[i].oid == appstate.intervals.top_bound_id )
+		    option += 'top of timescale';
+		
+		else
+		    option += bound_list[i].oid;
+		
+		option += ")</option>\n";
+		option_string += option;
+	    }
 	}
 	
 	appstate.intervals.bound_options = option_string;
@@ -1665,12 +1727,22 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 
 	if ( range_id && range_id != api_data.bounds_id[bound_id].uid )
 	{
-	    var top_name = api_data.bounds_id[range_id].inm;
-
-	    content += '&nbsp;&emdash;&nbsp;<span class="tsed_timescale_label">' + top_name + '</span>';
+	    var top_name = getLowerName(range_id);
+	    
+	    content += '&nbsp; - &nbsp;<span class="tsed_timescale_label">' + top_name + '</span>';
 	}
 	
 	return content;
+    }
+    
+    function getLowerName ( bound_id )
+    {
+	if ( api_data.bounds_id[bound_id] )
+	{
+	    return api_data.bounds_id[bound_id].one_lower || 'unknown';
+	}
+	
+	else return 'cannot find bound';
     }
     
     // INTERVALS ACTIONS
@@ -1679,7 +1751,13 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     
     function addIntervalsAction ( )
     {
-	if ( appstate.intervals.dirty )
+	if ( ! appstate.current_timescale_id )
+	{
+	    window.alert("You must create a timescale or select an existing one before adding intervals");
+	    return;
+	}
+	
+	else if ( appstate.intervals.dirty )
 	{
 	    window.confirm("There are unsaved changes in this time scale. Save or revert them before adding new intervals");
 	    return;
@@ -1814,14 +1892,110 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     }
     
     this.saveIntervalsAction = saveIntervalsAction;
-
+    
     // If the bounds list fails any of the validation criteria, return true.
     
     function validateBoundsList ( )
     {
-	return;
-    }
+	var bounds_list = appstate.intervals.bounds;
+	var bounds_id = appstate.intervals.bounds_id;
+	
+	// Go through the bounds one by one, and check that they make sense. If we find any
+	// problems, highlight that bound and display an alert.
+	
+	for ( var i=0; i < bounds_list.length; i++ )
+	{
+	    var age = bounds_list[i].age;
+	    var top_id = bounds_list[i].uid;
+	    var base_id = bounds_list[i].bid;
+	    var range_id = bounds_list[i].tid;
+	    var type = bounds_list[i].btp;
+	    var top_age, base_age, range_age;
+	    
+	    if ( top_id ) top_age = bounds_id[top_id].age;
+	    
+	    if ( age == undefined || age == '' )
+	    {
+		continue;
+	    }
+	    
+	    // Otherwise make sure that the age is not less than the age of the bound marked as
+	    // the top of its interval, if there is one.
+	    
+	    if ( top_age != undefined && age <= top_age )
+	    {
+		return boundFail(bounds_list[i], "must have an age greater than its next higher bound");
+	    }
+	    
+	    // If the bound type is 'same', make sure we have a bound id and that the age matches up.
+	    
+	    if ( type == 'same' )
+	    {
+		if ( base_id == undefined )
+		{
+		    return boundFail(bounds_list[i], "has bound type 'same' so must have a base bound");
+		}
+		
+		var base_record = appstate.intervals.bounds_id[base_id] || api_data.bounds_id[base_id];
+		
+		if ( base_record == undefined )
+		{
+		    return boundFail(bounds_list[i], ": base bound '" + base_id + "' cannot be found");
+		}
+		
+		if ( base_record.age != age )
+		{
+		    return boundFail(bounds_list[i], ": age of base bound does not match age of this one");
+		}
+	    }
+	    
+	    else if ( type == 'fraction' )
+	    {
+		if ( base_id == undefined )
+		{
+		    return boundFail(bounds_list[i], "has bound type 'same' so must have a base bound");
+		}
+		
+		var base_record = appstate.intervals.bounds_id[base_id] || api_data.bounds_id[base_id];
+		
+		if ( base_record == undefined )
+		{
+		    return boundFail(bounds_list[i], ": base bound '" + base_id + "' cannot be found");
+		}
 
+		if ( base_record.age < age )
+		{
+		    return boundFail(bounds_list[i], ": age of base bound must be less than the age of this one");
+		}
+		
+		var range_record = appstate.intervals.bounds_id[range_id] || api_data.bounds_id[range_id];
+		
+		if ( range_record == undefined )
+		{
+		    return boundFail(bounds_list[i], ": range bound '" + range_id + "' cannot be found");
+		}
+		
+		if ( range_record.age > age )
+		{
+		    return boundFail(bounds_list[i], ": age of range bound must be less than the age of this one");
+		}
+	    }
+	}
+    }
+    
+    function boundFail ( bound_record, message )
+    {
+	var text = 'Bound ' + bound_record.oid;
+
+	if ( bound_record.age != undefined && bound_record.age != '' )
+	    text += ' (' + bound_record.age + ')';
+
+	text += ' ' + message;
+
+	window.alert(text);
+	return 1;
+    }
+    
     // Respond to successful completion of an interval bound update.
     
     function saveIntervalsComplete ( response )
@@ -1875,7 +2049,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     {
 	displayIntervals();
     }
-
+    
     this.redisplayIntervalsAction = redisplayIntervalsAction;
     
     // ADD INTERVALS MODAL
@@ -1912,61 +2086,173 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	// bound to an upper bound whenever possible.
 	
 	var new_bounds = [ ];
+	var last_age, last_bound_id;
+	var start_index = 0;
+	var last_index = 0;
 	var error = 0;
 	
-	// Start by matching the top bound. If we can't match it, then create a new bound.  This
-	// will either be the top bound of the entire timescale, or a floating bound somewhere in
-	// the middle.
+	// If the top bound is one from this timescale, then that will be the top_id (uid) of the
+	// first added interval. This allows us to link a new set of intervals to the bottom of
+	// the existing timescale, or to provide an alternate sequence of intervals covering part
+	// or all of the existing timescale.
 	
-	var top_age = getElementValue("ia_age_0");
-	var last_age, last_bound_id;
+	var top_bound = getElementValue("ia_select_0");
 	
-	if ( top_age == "" || ! valid_age.test(top_age) )
+	if ( appstate.intervals.bounds_id && appstate.intervals.bounds_id[top_bound] )
 	{
-	    $("#ia_age_0").addClass('tsed_error');
-	    error = 1;
+	    last_bound_id = top_bound;
+	    last_age = appstate.intervals.bounds_id[top_bound].age;
+	    last_index = 0;
+	    start_index = 1;
 	}
 	
-	else if ( age_to_id[top_age] )
-	{
-	    last_bound_id = age_to_id[top_age];
-	    last_age = top_age;
-	}
+	// Otherwise, every record will correspond to a bound.
 	
-	else
+	for ( var i=start_index; i<=10; i++ )
 	{
-	    new_bounds.push({ sid: timescale_id, btp: 'absolute',
-			      age: top_age, _label: 'a0' });
-	    last_bound_id = '@a0';
-	    last_age = top_age;
-	}
-	
-	for ( var i=1; i <= 10; i++ )
-	{
-	    var interval_name = getElementValue("ia_name_" + i);
-	    var bound_age = getElementValue("ia_age_" + i);
-	    var record_label = 'a' + i;
+	    var bound_id = getElementValue('ia_select_' + i);
+	    var bound_age = getElementValue('ia_age_' + i);
+	    var bound_type = getElementValue('ia_type_' + i);
+	    var bound_name = getElementValue('ia_name_' + i);
 	    
-	    if ( bound_age == "" && interval_name != "" )
+	    var new_record = { sid: timescale_id, age: bound_age, inm: bound_name, _label: 'a' + i };
+	    
+	    if ( last_bound_id ) new_record.uid = last_bound_id;
+	    
+	    if ( bound_age == '' )
 	    {
-		$("#ia_age_" + i).addClass('tsed_error');
+		break;
+	    }
+	    
+	    else if ( ! valid_age.test(bound_age) )
+	    {
+		$('#ia_age_' + i).addClass('tsed_error');
 		error = 1;
 	    }
 
-	    else if ( bound_age == "" ) break;
-
-	    else if ( ! valid_age.test(bound_age) || bound_age <= last_age )
+	    else if ( last_age != undefined && Number(bound_age) <= Number(last_age) )
 	    {
-		$("#ia_age_" + i).addClass('tsed_error');
+		$('#ia_age_' + i).addClass('tsed_error');
+		error = 1;
+	    }
+
+	    if ( bound_type != 'absolute' && bound_id != 'absolute' && ! api_data.bounds_id[bound_id] )
+	    {
+		$('#ia_select_' + i).addClass('tsed_error');
 		error = 1;
 	    }
 	    
-	    new_bounds.push({ sid: timescale_id, btp: 'absolute', age: bound_age,
-			      inm: interval_name, uid: last_bound_id, _label: record_label });
+	    if ( bound_type == 'absolute' || bound_id == 'absolute' )
+	    {
+		new_record.btp = 'absolute';
+	    }
 	    
-	    last_bound_id = '@' + record_label;
+	    else if ( bound_type == 'same' )
+	    {
+		new_record.btp = 'same';
+		
+		if ( api_data.bounds_id[bound_id] )
+		{
+		    new_record.bid = bound_id;
+		}
+	    }
+	    
+	    else if ( bound_type == 'fraction' )
+	    {
+		new_record.btp = 'fraction';
+		new_record.frc = getElementValue("ia_frac_" + i);
+
+		if ( ! valid_frac.test(new_record.frc) )
+		{
+		    $('#ia_frac_' + i).addClass('tsed_error');
+		    error = 1;
+		}
+		
+		if ( api_data.bounds_id[bound_id] )
+		{
+		    new_record.bid = api_data.bounds_id[bound_id].oid;
+		    new_record.tid = api_data.bounds_id[bound_id].uid;
+		}
+	    }
+
+	    else
+	    {
+		$('#ia_select_' + i).addClass('tsed_error');
+		error = 1;
+	    }
+	    
+	    new_bounds.push(new_record);
+	    
+	    last_bound_id = '@a' + i;
 	    last_age = bound_age;
+	    last_index = i;
 	}
+
+	// Now make sure there aren't any gaps in the bound list.
+
+	for ( i=last_index+1; i <= 10; i++ )
+	{
+	    var bound_age = getElementValue('ia_age_' + i);
+	    if ( bound_age != '' )
+	    {
+		$('#ia_age_' + i).addClass('tsed_error');
+		error = 1;
+	    }
+	}
+	
+	// // Start by matching the top bound. If we can't match it, then create a new bound.  This
+	// // will either be the top bound of the entire timescale, or a floating bound somewhere in
+	// // the middle.
+	
+	// var top_age = getElementValue("ia_age_0");
+	// var last_age, last_bound_id;
+	
+	// if ( top_age == "" || ! valid_age.test(top_age) )
+	// {
+	//     $("#ia_age_0").addClass('tsed_error');
+	//     error = 1;
+	// }
+	
+	// else if ( age_to_id[top_age] )
+	// {
+	//     last_bound_id = age_to_id[top_age];
+	//     last_age = top_age;
+	// }
+	
+	// else
+	// {
+	//     new_bounds.push({ sid: timescale_id, btp: 'absolute',
+	// 		      age: top_age, _label: 'a0' });
+	//     last_bound_id = '@a0';
+	//     last_age = top_age;
+	// }
+	
+	// for ( var i=1; i <= 10; i++ )
+	// {
+	//     var interval_name = getElementValue("ia_name_" + i);
+	//     var bound_age = getElementValue("ia_age_" + i);
+	//     var record_label = 'a' + i;
+	    
+	//     if ( bound_age == "" && interval_name != "" )
+	//     {
+	// 	$("#ia_age_" + i).addClass('tsed_error');
+	// 	error = 1;
+	//     }
+
+	//     else if ( bound_age == "" ) break;
+
+	//     else if ( ! valid_age.test(bound_age) || bound_age <= last_age )
+	//     {
+	// 	$("#ia_age_" + i).addClass('tsed_error');
+	// 	error = 1;
+	//     }
+	    
+	//     new_bounds.push({ sid: timescale_id, btp: 'absolute', age: bound_age,
+	// 		      inm: interval_name, uid: last_bound_id, _label: record_label });
+	    
+	//     last_bound_id = '@' + record_label;
+	//     last_age = bound_age;
+	// }
 
 	if ( error ) return;
 
@@ -1990,7 +2276,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     }
     
     this.addIntervalsSaveAction = addIntervalsSaveAction;
-
+    
     function addIntervalsSaveComplete ( response )
     {
 	var timescale_id = appstate.current_timescale_id;
@@ -2001,7 +2287,8 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 		modalClose('add_intervals');
 		addIntervalsClearAction();
 		clearBoundEditor();
-		displayIntervals(timescale_id);
+		loadIntervals(timescale_id);
+		displayIntervals();
 	    });
 	}
 	
@@ -2010,23 +2297,161 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    modalClose('add_intervals');
 	    window.alert("WARNING: all interval bounds in this timescale have been deleted.");
 	    api_data.timescale_bound_list[timescale_id] = [ ];
-		addIntervalsClearAction();
-	    displayIntervals(timescale_id);
+	    addIntervalsClearAction();
+	    loadIntervals(timescale_id);
+	    displayIntervals();
 	}	
     }
     
-    function addIntervalsSelectAge ( i )
+    function addIntervalsCheck ( which, i )
     {
-	var bound_id = getElementValue("ia_select_" + i);
+	// var age = getElementValue("ia_age_" + i);
+	// var fraction = getElementValue("ia_frac_" + i);
 	
-	if ( bound_id )
+	if ( which == 'age' )
 	{
-	    var selected_age = appstate.intervals.bounds_id[bound_id].age;
-	    setElementValue("ia_age_" + i, selected_age);
+	    var type = getElementValue("ia_type_" + i);
+	    
+	    if ( type == 'fraction' )
+	    {
+		addIntervalsCheckAge( which, i );
+	    }
+	    
+	    else
+	    {
+		setElementValue("ia_select_" + i, 'absolute');
+		setElementValue("ia_type_" + i, 'absolute');
+		setElementValue("ia_frac_" + i, '');
+		setElementDisabled("ia_frac_" + i, 1);
+	    }
+	}
+	
+	else if ( which == 'frac' )
+	{
+	    addIntervalsCheckAge( which, i );
+	}
+	
+	else if ( which == 'link' )
+	{
+	    var adjust_link = getElementValue("ia_select_" + i);
+	    var current_sid = appstate.add_intervals.current_sid || 'tsc:1';
+	    
+	    if ( adjust_link == 'absolute' )
+	    {
+		setElementValue("ia_type_" + i, 'absolute');
+		setElementValue("ia_frac_" + i, '');
+		setElementDisabled("ia_frac_" + i, 1);
+	    }
+	    
+	    else if ( adjust_link == 'same' )
+	    {
+		setElementValue("ia_type_" + i, 'same');
+		setElementValue("ia_frac_" + i, '');
+		setElementDisabled("ia_frac_" + i, 1);
+		openBoundSelectorForAdd('base', i, current_sid);
+	    }
+	    
+	    else if ( adjust_link == 'fraction' )
+	    {
+		setElementValue("ia_type_" + i, 'fraction');
+		setElementDisabled("ia_frac_" + i, 0);
+		openBoundSelectorForAdd('interval', i, current_sid);
+	    }
+	    
+	    else if ( appstate.intervals.bounds_id && appstate.intervals.bounds_id[adjust_link] )
+	    {
+		var selected_age = appstate.intervals.bounds_id[adjust_link].age;
+		setElementValue("ia_age_" + i, selected_age);
+		setElementValue("ia_type_" + i, 'same');
+		setElementValue("ia_frac_" + i, '');
+		setElementDisabled("ia_frac_" + i, 1);
+	    }
+	}
+    }
+
+    function addIntervalsCheckAge ( which, i )
+    {
+	var selected_id = getElementValue("ia_select_" + i);
+	var bound_record = api_data.bounds_id[selected_id];
+	
+	if ( ! bound_record )
+	{
+	    window.alert("Could not find a bound record for '" + selected_id + "'");
+	    return;
+	}
+	
+	var base_age = bound_record.age;
+	var range_age = api_data.bounds_id[bound_record.uid].age;
+	
+	if ( which == 'age' )
+	{
+	    var new_age = getElementValue("ia_age_" + i);
+	    var new_fraction = (base_age - new_age) / (base_age - range_age);
+	    new_fraction = Math.round(new_fraction * 100000) / 100000;
+
+	    setElementValue("ia_frac_" + i, new_fraction);
+	}
+
+	else if ( which == 'frac' )
+	{
+	    var new_fraction = getElementValue("ia_frac_" + i);
+	    var new_age = base_age - (base_age - range_age) * new_fraction;
+	    new_age = Math.round(new_age * 100) / 100;
+
+	    setElementValue("ia_age_" + i, new_age);
 	}
     }
     
-    this.addIntervalsSelectAge = addIntervalsSelectAge;
+    function completeBoundAddSelector ( link_type, i, link_id )
+    {
+	var link_record = api_data.bounds_id[link_id];
+
+	if ( ! link_record )
+	{
+	    winoow.alert("Could not find record for bound '" + link_id + "'");
+	    return;
+	}
+	
+	var adj = link_type == 'base' ? 'same as ' : 'modeled as ';
+	
+	var new_menu = '<option value="' + link_record.oid + '" selected>' + adj + link_record.inm + "</option>\n" +
+	    '<option value="absolute">absolute</option>' + "\n" +
+	    '<option value="same">same as...</option>' + "\n" +
+	    '<option value="fraction">modeled as...</option>' + "\n" +
+	    appstate.intervals.bound_options;
+	
+	setInnerHTML('ia_select_' + i, new_menu);
+	
+	if ( link_type == 'base' )
+	{
+	    setElementValue('ia_age_' + i, link_record.age);
+	    setElementValue('ia_type_' + i, 'same');
+	    setElementValue('ia_frac_' + i, '');
+	    setElementDisabled('ia_frac_' + i, 1);
+	    var next = i + 1;
+	    $('ia_name_' + next).focus();
+	}
+	
+	else if ( link_type == 'interval' )
+	{
+	    setElementValue('ia_type_' + i, 'fraction');
+	    var frac_elt = myGetElement('ia_frac_' + i);
+	    if ( frac_elt )
+	    {
+		frac_elt.value = '';
+		frac_elt.disabled = 0;
+		frac_elt.focus();
+	    }
+	}
+	
+	else
+	{
+	    window.alert("ERROR: completeBoundAddSelector was not given a link type");
+	}
+
+    }
+    
+    this.addIntervalsCheck = addIntervalsCheck;
     
     function addIntervalsClearAction ( )
     {
@@ -2258,17 +2683,31 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 
     function updateOtherPanes ( )
     {
-	var bounds_menu = '<option value="">--</option>' + "\n" + appstate.intervals.bound_options;
+	var top_bound_menu = '<option value="">--</option>' + "\n" +
+	    appstate.intervals.bound_options;
+	var new_ints_menu = '<option value="absolute">absolute age</option>' + "\n" +
+	    '<option value="same">same as...</option>' + "\n" +
+	    '<option value="fraction">modeled as...</option>' + "\n" +
+	    appstate.intervals.bound_options;
 	
-	setInnerHTML("be_top_bound", bounds_menu);
-	setInnerHTML("ia_select_0", bounds_menu);
+	setInnerHTML("be_top_bound", top_bound_menu);
+	setInnerHTML("ia_select_0", new_ints_menu);
+	setInnerHTML("ia_select_1", new_ints_menu);
+	setInnerHTML("ia_select_2", new_ints_menu);
+	setInnerHTML("ia_select_3", new_ints_menu);
+	setInnerHTML("ia_select_4", new_ints_menu);
+	setInnerHTML("ia_select_5", new_ints_menu);
+	setInnerHTML("ia_select_6", new_ints_menu);
+	setInnerHTML("ia_select_7", new_ints_menu);
+	setInnerHTML("ia_select_8", new_ints_menu);
+	setInnerHTML("ia_select_9", new_ints_menu);
+	setInnerHTML("ia_select_10", new_ints_menu);
     }
     
     function fillBoundEditor ( bound_id )
     {
 	appstate.intervals.current_bound_id = bound_id;
 	
-	var msg = myGetElement('bound_editor_msg');
 	var bound_record = appstate.intervals.bounds_id[bound_id];
 	
 	// If the bound record cannot be found for some reason, display a message and clear the
@@ -2276,23 +2715,24 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	
 	if ( ! bound_record )
 	{
-	    msg.style.display = 'block';
-	    msg.textContent = "Bound '" + bound_id + "' was not found";
-	    clearBoundEdit();
+	    // msg.style.display = 'block';
+	    // msg.textContent = "Bound '" + bound_id + "' was not found";
+	    clearBoundEditor();
+	    displayBoundError("Bound '" + bound_id + "' was not found");
 	    return;
 	}
-
+	
 	// Otherwise hide the message box.
 	
 	else
 	{
-	    msg.textContent = 'no message';
-	    msg.style.display = 'none';
+	    setElementContent("be_error_msg", '');
 	}
 	
 	// Remove any error highlighting.
 
 	$("#be_age").removeClass('tsed_error');
+	$("#be_bound_link").removeClass('tsed_error');
 	$("#be_fraction").removeClass('tsed_error');
 	$("#be_intname").removeClass('tsed_error');
 	
@@ -2353,9 +2793,6 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	// Then the bound type and link(s).
 	
 	setElementValue('be_bound_type', bound_record.btp);
-	
-	// fillBoundEditorLinks(bound_record);
-
 	setBoundLinkMenu(bound_record);
 	
 	// Then adjust the fraction field.
@@ -2365,7 +2802,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    setElementValue("be_fraction", bound_record.frc);
 	    setElementDisabled("be_fraction", 0);
 	}
-
+	
 	else
 	{
 	    setElementValue("be_fraction", '');
@@ -2375,11 +2812,12 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     
     this.fillBoundEditor = fillBoundEditor;
     
-    function setBoundLinkMenu ( bound_record, new_type )
+    function setBoundLinkMenu ( bound_record, new_type, new_base, new_range )
     {
 	var link_menu = '<option value="">--</option>' + "\n";
 	var btp = new_type || bound_record.btp;
-	var bid = bound_record.bid;
+	var bid = new_base || bound_record.bid;
+	var tid = new_range || bound_record.tid;
 	
 	if ( btp == 'same' )
 	{
@@ -2387,18 +2825,18 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    {
 		var base_name = api_data.bounds_id[bid].inm;
 		link_menu = '<option value="unchanged">' + base_name + '</option>' + "\n";
-		link_menu += '<option value="choose">choose a different bound...</option>' + "\n";
+		link_menu += '<option value="base">choose a different bound...</option>' + "\n";
 	    }
 
 	    else if ( bid )
 	    {
 		link_menu = '<option value="unchanged">ERROR: ' + bid + ' not found</option>' + "\n";
-		link_menu += '<option value="choose">choose a different bound...</option' + "\n";		
+		link_menu += '<option value="base">choose a different bound...</option' + "\n";		
 	    }
 
 	    else
 	    {
-		link_menu += '<option value="choose">choose a bound...</option>' + "\n";
+		link_menu += '<option value="base">choose a bound...</option>' + "\n";
 	    }
 	}
 	
@@ -2408,45 +2846,45 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    {
 		var base_name = api_data.bounds_id[bid].inm;
 		
-		if ( bound_record.tid && bound_record.tid == api_data.bounds_id[bid].uid )
+		if ( tid && tid == api_data.bounds_id[bid].uid )
 		{
 		    link_menu = '<option value="unchanged">' + base_name + '</option>' + "\n";
-		    link_menu += '<option value="choose">choose a different interval...</option>' + "\n";
-		    link_menu += '<option value="range">add a top-of-range interval...</option>' + "\n";
+		    link_menu += '<option value="interval">choose a different interval...</option>' + "\n";
+		    link_menu += '<option value="top">choose a different top age...</option>' + "\n";
 		}
 		
-		else if ( bound_record.tid && api_data.bounds_id[bound_record.tid])
+		else if ( tid && api_data.bounds_id[tid])
 		{
-		    var range_name = getLowerName(bound_record.tid);
+		    var range_name = getLowerName(tid);
 		    link_menu = '<option value="unchanged">' + base_name + ' - ' +
 			range_name +'</option>' + "\n";
-		    link_menu += '<option value="choose">choose a different interval...</option>' + "\n";
-		    link_menu += '<option value="range">choose a different top-of-range interval...</option>' + "\n";
+		    link_menu += '<option value="interval">choose a different interval...</option>' + "\n";
+		    link_menu += '<option value="top">choose a different top age...</option>' + "\n";
 		}
 
-		else if ( bound_record.tid )
+		else if ( tid )
 		{
-		    link_menu = '<option value="unchanged">' + base_name + ' - ERROR: ' +
-			bound_record.tid + ' not found</option>' + "\n";
-		    link_menu += '<option value="choose">choose a different interval...</option>' + "\n";
-		    link_menu += '<option value="range">add a top-of-range interval...</option>' + "\n";
+		    link_menu = '<option value="unchanged">' + base_name + ' - ERROR: ' + tid +
+			' not found</option>' + "\n";
+		    link_menu += '<option value="interval">choose a different interval...</option>' + "\n";
+		    link_menu += '<option value="top">choose a different top age...</option>' + "\n";
 		}
 
 		else
 		{
-		    link_menu += '<option value="choose">choose an interval...</option>' + "\n";
+		    link_menu += '<option value="interval">choose an interval...</option>' + "\n";
 		}
 	    }
 
 	    else if ( bid )
 	    {
 		link_menu = '<option value="unchanged">ERROR: ' + bid + ' not found</option>' + "\n";
-		link_menu += '<option value="choose">choose a different interval...</option' + "\n";		
+		link_menu += '<option value="interval">choose a different interval...</option' + "\n";		
 	    }
 	    
 	    else
 	    {
-		link_menu += '<option value="choose">choose an interval...</option>' + "\n";
+		link_menu += '<option value="interval">choose an interval...</option>' + "\n";
 	    }
 	}
 	
@@ -2528,11 +2966,16 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     // 	    frac_elt.disabled = 'true';
     // 	}
     // }
-    
-    function clearBoundEditor ( )
+
+    function displayBoundError ( text )
     {
-	var msg = myGetElement('bound_editor_msg');
-	
+	setElementContent("be_error_msg", text);
+    }
+    
+    function clearBoundEditor ( message )
+    {
+	if ( ! message ) message = '';
+	setElementContent('be_error_msg', message);
 	setElementContent('be_title', '');
 	setElementValue('be_top_bound', '');
 	setElementValue('be_intname', '');
@@ -2544,8 +2987,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	setElementValue('be_bound_link', '');
 	setElementDisabled('be_fraction', 1);
 	
-	msg.textContent = 'no message';
-	msg.style.display = 'none';
+	// msg.style.display = 'none';
 	
 	// range.style.display = 'none';
 	
@@ -2561,7 +3003,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     // This function is called whenever any of the valus displayed in the bound editor pane is
     // changed.
     
-    function checkBoundEditor ( changed )
+    function checkBoundEditor ( changed, new_base, new_range )
     {
 	var current_id = appstate.intervals.current_bound_id;
 	var app_record = appstate.intervals.bounds_id[current_id];
@@ -2597,29 +3039,36 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	
 	else if ( changed == 'type' )
 	{
-	    checkBoundAge(app_record, 'bounds');
+	    checkBoundAge(app_record, 'type');
 	    redisplay_bound = 1;
 	}
 
 	else if ( changed == 'link' )
 	{
-	    var new_link = getElementValue("be_bound_link");
-	    if ( new_link == "choose" )
+	    var link_adjust = getElementValue("be_bound_link");
+	    // $$$ pass age and link_adjust, so that bound selector can highlight the appropriate
+	    // element in any selected timescale.
+	    
+	    if ( link_adjust == "top" )
 	    {
-		openBoundSelector('base');
-		return;
+		var tid = app_record.tid;
+		var sid = api_data.bounds_id[tid] ? api_data.bounds_id[tid].sid : 'tsc:1';
+		openBoundSelectorForEdit(link_adjust, sid, tid);
 	    }
-
-	    else if ( new_link == "range" )
+	    
+	    else if ( link_adjust == "base" || link_adjust == "interval" )
 	    {
-		openBoundSelector('range');
-		return;
+		var bid = app_record.bid;
+		var sid = api_data.bounds_id[bid] ? api_data.bounds_id[bid].sid : 'tsc:1';
+		openBoundSelectorForEdit(link_adjust, sid, bid);
 	    }
+	    
+	    return;
 	}
-
+	
 	else if ( changed == 'link_select' )
 	{
-	    checkBoundAge(app_record, 'bounds');
+	    checkBoundAge(app_record, 'links', new_base, new_range);
 	    redisplay_bound = 1;
 	}
 	
@@ -2633,11 +3082,59 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	else if ( changed == 'intname' )
 	{
 	    var new_intname = getElementValue("be_intname");
-	    app_record.inm = new_intname;
-	    redisplay_bound = 1;
-	    redisplay_interval = 1;
-	}
 
+	    if ( app_record.uid )
+	    {
+		app_record.inm = new_intname;
+		redisplay_all = 1;
+		// redisplay_interval = 1;
+	    }
+
+	    else
+	    {
+		window.alert("You must specify an upper boundary for the interval before giving it a name.");
+		setElementValue("be_intname", 'none');
+	    }
+	}
+	
+	else if ( changed == 'lower' )
+	{
+	    var new_lower = getElementValue("be_lower");
+	    var lower_bound_index;
+	    var lower_matches = 0;
+	    
+	    for ( var i=0; i < appstate.intervals.bounds.length; i++ )
+	    {
+		var bound_record = appstate.intervals.bounds[i];
+		
+		if ( bound_record.uid && bound_record.uid == current_id )
+		{
+		    lower_bound_index = i;
+		    lower_matches++;
+		}
+	    }
+	    
+	    if ( lower_matches == 1 && lower_bound_index != undefined )
+	    {
+		appstate.intervals.bounds[lower_bound_index].inm = new_lower;
+		appstate.intervals.bounds[lower_bound_index].dirty = 1;
+		redisplay_all = 1;
+	    }
+	    
+	    else if ( lower_matches > 1 )
+	    {
+		window.alert("More than one lower interval is defined for this boundary. Select one to changes its name.");
+		setElementValue("be_lower", 'multiple');
+	    }
+	    
+	    else
+	    {
+		window.alert("No lower interval is defined for this boundary.");
+		setElementValue("be_lower", 'none');
+	    }
+	    
+	}
+	
 	// Then compare the local record to the record as last fetched from the database. If it
 	// differs, then the record has changes that need to be saved.
 	
@@ -2646,7 +3143,8 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	if ( app_record.inm != db_record.inm ) app_record.dirty = 1;
 	if ( app_record.age != db_record.age ) app_record.dirty = 1;
 	if ( app_record.ger != db_record.ger ) app_record.dirty = 1;
-	if ( app_record.frc != db_record.frc ) app_record.dirty = 1;
+	if ( app_record.frc != db_record.frc &&
+	   ( has_digit.test(app_record.frc) || has_digit.test(db_record.frc) ) ) app_record.dirty = 1;
 	if ( app_record.uid != db_record.uid ) app_record.dirty = 1;
 	if ( app_record.bid != db_record.bid ) app_record.dirty = 1;
 	if ( app_record.tid != db_record.tid ) app_record.dirty = 1;
@@ -2659,7 +3157,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 
 	appstate.intervals.dirty = 0;
 	
-	for ( var i=0; i < appstate.intervals.bounds.length; i++ )
+	for ( i=0; i < appstate.intervals.bounds.length; i++ )
 	{
 	    if ( appstate.intervals.bounds[i].dirty ) appstate.intervals.dirty = 1;
 	}
@@ -2698,14 +3196,17 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     
     this.checkBoundEditor = checkBoundEditor;
 
-    function checkBoundAge ( app_record, what_changed )
+    function checkBoundAge ( app_record, what_changed, new_base, new_range )
     {
 	var bound_type = app_record.btp;
 	var base_id = app_record.bid;
 	var range_id = app_record.tid;
 	
 	var new_age, new_fraction;
-	var new_type, new_base, new_range;
+	var new_type;
+	var check_range;
+	
+	clearBoundError();
 	
 	if ( what_changed == 'age' )
 	{
@@ -2752,17 +3253,16 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    }
 	}
 	
-	else if ( what_changed == 'bounds' )
+	else if ( what_changed == 'type' )
 	{
 	    new_type = getElementValue("be_bound_type");
-
-	    setBoundLinkMenu(app_record, new_type);
 	    
 	    if ( new_type == 'absolute' || new_type == 'spike' )
 	    {
 		new_age = app_record.age;
 		new_fraction = '';
-		setElementDisabled('be_fraction', 1);
+		setElementValue("be_fraction", '');
+		setElementDisabled("be_fraction", 1);
 	    }
 	    
 	    else if ( new_type == 'same' )
@@ -2777,6 +3277,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 		else if ( base_id )
 		{
 		    new_age = api_data.bounds_id[base_id].age;
+		    new_base = base_id;
 		    setElementValue("be_age", new_age);
 		}
 		
@@ -2786,32 +3287,49 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 		new_fraction = '';
 		setElementValue("be_fraction", '');
 		setElementDisabled('be_fraction', 1);
-		$("#be_fraction").removeClass('tsed_error');
 	    }
 	    
-	    else if ( new_type == 'fraction' && base_id && range_id && base_id != range_id )
-	    {		
-		new_age = app_record.age;
+	    else if ( new_type == 'fraction' )
+	    {
+		if ( base_id )
+		{
+		    new_base = base_id;
+		    
+		    if ( ! range_id || base_id == range_id )
+		    {
+			new_range = api_data.bounds_id[base_id].uid;
+		    }
+		}
 		
-		var base_age = appstate.intervals.bounds_id[base_id] ?
-		    appstate.intervals.bounds_id[base_id].age : api_data.bounds_id[base_id].age;
-		
-		var range_age = appstate.intervals.bounds_id[range_id] ?
-		    appstate.intervals.bounds_id[range_id].age : api_data.bounds_id[range_id].age;
-		
-		new_fraction = (base_age - new_age) / (base_age - range_age);
-		new_fraction = Math.round(new_fraction * 100000) / 100000;
-		
-		setElementDisabled('be_fraction', 0);
+		else
+		{
+		    new_base = chooseBestInterval(app_record.age, (appstate.intervals.source_timescale_id || 'tsc:1' ));
+		    
+		    if ( api_data.bounds_id[new_base] )
+		    {
+			new_range = api_data.bounds_id[new_base].uid;
+		    }
+		}
 	    }
 	    
 	    else
 	    {
-		new_type = undefined;
+		console.log("ERROR: unknown bound type '" + new_type + "'");
 	    }
+	    
+	    setBoundLinkMenu(app_record, new_type, new_base, new_range);
 	}
 	
-	// Now check to make sure that the new values make sense. If the new age is empty, this
+	else if ( what_changed == 'links' )
+	{
+	    // if only the range bound was changed, then the new base bound will be the same as the old.
+
+	    if ( new_range ) new_base = new_base || app_record.bid;
+
+	    setBoundLinkMenu(app_record, app_record.btp, new_base, new_range);
+	}
+
+	// Now check to make sure that the new values make sense.  If the new age is empty, this
 	// indicates that the bound should be deleted when this timescale is saved. For any bounds
 	// that have this one as a top_id, we re-link their top_id to the top_id of this one.
 	
@@ -2819,41 +3337,106 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	{
 	    app_record.age = '';
 	    app_record.frc = '';
-	    $("#be_age").removeClass('tsed_error');
-	    $("#be_fraction").removeClass('tsed_error');
-	    $("#be_bound_type").removeClass('tsed_error');
 	    unlinkInterval(app_record.oid);
 	    return 'all';
 	}
-
-	// Otherwise, we need to check that the age is between the next higher and next lower ages.
 	
-	var top_id = app_record.uid;
-	var top_age = top_id ? appstate.intervals.bounds_id[top_id].age : undefined;
-	
-	var lower_age;
-	
-	for ( var i=0; i < appstate.intervals.bounds.length; i++ )
-	{
-	    if ( appstate.intervals.bounds[i].uid == app_record.oid &&
-		 appstate.intervals.bounds[i].age != undefined )
-	    {
-		if ( lower_age == undefined || appstate.intervals.bounds[i].age < lower_age )
-		    lower_age = appstate.intervals.bounds[i].age;
-	    }
-	}
+	// If the age has changed, we need to check that the new age is between the next higher
+	// and next lower bounds.
 	
 	if ( new_age != undefined )
 	{
-	    if ( ( top_age != undefined && Number(new_age) <= Number(top_age) ) ||
-		 ( lower_age != undefined && Number(new_age) >= Number(lower_age) ) )
+	    var top_id = app_record.uid;
+	    var top_age = top_id ? appstate.intervals.bounds_id[top_id].age : undefined;
+	    
+	    var lower_age;
+	    
+	    for ( var i=0; i < appstate.intervals.bounds.length; i++ )
+	    {
+		if ( appstate.intervals.bounds[i].uid == app_record.oid &&
+		     appstate.intervals.bounds[i].age != undefined )
+		{
+		    if ( lower_age == undefined || appstate.intervals.bounds[i].age < lower_age )
+			lower_age = appstate.intervals.bounds[i].age;
+		}
+	    }
+	    
+	    if ( top_age != undefined && Number(new_age) <= Number(top_age) )
 	    {
 		$("#be_age").addClass('tsed_error');
+		displayBoundError("age must be greater than next higher bound");
+		return;
+	    }
+	    
+	    if ( lower_age != undefined && Number(new_age) >= Number(lower_age) )
+	    {
+		$("#be_age").addClass('tsed_error');
+		displayBoundError("age must be less than next lower bound");
 		return;
 	    }
 	}
 	
-	// Then, we need to check that the fraction is between 0 and 1.
+	// If the type is 'fraction', we need to make sure that the age falls within the specified bounds.
+	
+	var check_type = new_type || app_record.btp;
+	var check_age = new_age != undefined ? new_age : app_record.age;
+	var check_base = new_base || base_id;
+	var check_range = new_range || range_id;
+	
+	if ( check_type == 'fraction' )
+	{
+	    if ( check_base )
+	    {
+		var base_age = appstate.intervals.bounds_id[check_base] ?
+		    appstate.intervals.bounds_id[check_base].age :
+		    api_data.bounds_id[check_base].age;
+		
+		if ( base_age != undefined && Number(app_record.age) > Number(base_age) )
+		{
+		    setBoundLinkMenu(app_record, new_type, new_base, new_range);
+		    displayBoundError("the bound age is not within the selected range");
+		    $("#be_bound_link").addClass('tsed_error');
+		    if ( api_data.bound_id[check_base] )
+			appstate.intervals.source_timescale_id = api_data.bounds_id[check_base].sid;
+		    return;
+		}
+		
+		if ( check_range )
+		{
+		    var range_age = appstate.intervals.bounds_id[check_range] ?
+			appstate.intervals.bounds_id[check_range].age : api_data.bounds_id[check_range].age;
+		    
+		    if ( range_age != undefined && Number(app_record.age) < Number(range_age) )
+		    {
+			setBoundLinkMenu(app_record, new_type, new_base, new_range);
+			displayBoundError("the bound age is not within the selected range");
+			$("#be_bound_link").addClass('tsed_error');
+			return;
+		    }
+		    
+		    new_fraction = (base_age - app_record.age) / (base_age - range_age);
+		    new_fraction = Math.round(new_fraction * 100000) / 100000;
+		    
+		    setElementDisabled('be_fraction', 0);
+		}
+
+		else
+		{
+		    setBoundLinkMenu(app_record, new_type, new_base);
+		    displayBoundError("you must set a top bound for the modeled interval");
+		    $("#bd_bound_link").addClass('tsed_error');
+		}
+	    }
+
+	    else
+	    {
+		setBoundLinkMenu(app_record, new_type);
+		displayBoundError("you must choose an interval in which to model this bound");
+		$("#bd_bound_link").addClass('tsed_error');
+	    }
+	}
+	
+	// If the fraction has changed, we need to check that the new fraction is between 0 and 1.
 	
 	if ( new_fraction != undefined )
 	{
@@ -2865,26 +3448,27 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    else if ( new_fraction != "" )
 	    {
 		$("#be_fraction").addClass('tsed_error');
+		displayBoundError("fraction is out of range");
 		return;
 	    }
-	}
-
+	}	
+	
 	// If we get here, then we can update the app record.
-
+	
 	if ( new_age != undefined )
 	{
 	    app_record.age = new_age;
 	    setElementValue("be_age", new_age);
-	    $("#be_age").removeClass('tsed_error');
+	    // $("#be_age").removeClass('tsed_error');
 	}
-
+	
 	if ( new_fraction != undefined )
 	{
 	    app_record.frc = new_fraction;
 	    setElementValue("be_fraction", new_fraction);
-	    $("#be_fraction").removeClass('tsed_error');
+	    // $("#be_fraction").removeClass('tsed_error');
 	}
-
+	
 	if ( new_type != undefined )
 	{
 	    app_record.btp = new_type;
@@ -2893,11 +3477,15 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	if ( new_base != undefined )
 	{
 	    app_record.bid = new_base;
+	    if ( api_data.bounds_id[new_base] )
+		appstate.intervals.source_timescale_id = api_data.bounds_id[new_base].sid;
 	}
 
 	if ( new_range != undefined )
 	{
 	    app_record.tid = new_range;
+	    if ( api_data.bounds_id[new_range] )
+		appstate.intervals.source_timescale_id = api_data.bounds_id[new_range].sid;
 	}
 	
 	//     if ( app_record.btp == 'fraction' )
@@ -2931,13 +3519,40 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	
     }
 
+    function chooseBestInterval ( target_age, timescale_id )
+    {
+	var bound_list = api_data.timescale_bound_list[timescale_id];
+	var best_bound;
+	
+	for ( var i=0; i < bound_list.length; i++ )
+	{
+	    var bound_record = api_data.bounds_id[bound_list[i]];
+	    if ( bound_record && Number(bound_record.age) >= Number(target_age) )
+	    {
+		best_bound = bound_list[i];
+		break;
+	    }
+	}
+
+	return best_bound;
+    }
+
+    function clearBoundError ( )
+    {
+	$("#be_age").removeClass('tsed_error');
+	$("#be_fraction").removeClass('tsed_error');
+	$("#be_bound_type").removeClass('tsed_error');
+	$("#be_bound_link").removeClass('tsed_error');
+	setElementContent("be_error_msg", '');
+    }
+
     // This function removes the specified bound from the timescale by changing any top links that point
     // to it. These links are changed to its own top_id.
     
     function unlinkInterval ( bound_id )
     {
 	var bound_record = appstate.intervals.bounds_id[bound_id];
-
+	
 	if ( ! bound_record ) return;
 
 	var new_top = bound_record.uid;
@@ -2952,16 +3567,50 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    }
 	}
     }
+    
+    function openBoundSelectorForEdit ( link_type, timescale_id, bound_id )
+    {
+	appstate.bound_selector.choice_callback = function ( choice_id, type ) {
+	    if ( type == 'bound' )
+	    {
+		modalClose("bound_selector");
+		completeBoundEditSelector(link_type, choice_id);
+	    }
+	    
+	    else if ( type == 'timescale' )
+	    {
+		setBoundSelectorTimescale(choice_id);
+	    }
+	};
 
-    function openBoundSelector ( which )
+	openBoundSelectorBox(timescale_id, bound_id);
+    }
+
+    function openBoundSelectorForAdd ( link_type, i, timescale_id )
+    {
+	appstate.bound_selector.choice_callback = function ( choice_id, type ) {
+	    if ( type == 'bound' )
+	    {
+		modalClose("bound_selector");
+		completeBoundAddSelector(link_type, i, choice_id);
+	    }
+	    
+	    else if ( type == 'timescale' )
+	    {
+		setBoundSelectorTimescale(choice_id);
+	    }
+	};
+	
+	openBoundSelectorBox(timescale_id);
+    }
+    
+    function openBoundSelectorBox ( timescale_id, bound_id )
     {
 	var modal_elt = myGetElement("bound_selector");
 	var input_elt; // = myGetElement("bsel_input");
 	
-	appstate.bound_selector.choice_callback = function ( id ) {
-	    modalClose("bound_selector");
-	    completeBoundSelector(which, id);
-	};
+	if ( ! timescale_id ) timescale_id = 'tsc:1';
+	setBoundSelectorTimescale(timescale_id, bound_id);
 	
 	if ( modal_elt )
 	{
@@ -2974,24 +3623,104 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	}
     }
     
-    function completeBoundSelector ( which, link_id )
+    function setBoundSelectorTimescale ( timescale_id, bound_id )
+    {
+	if ( ! api_data.timescales_id[timescale_id] )
+	{
+	    timescale_id = 'tsc:1';
+	    bound_id = undefined;
+	}
+	
+    	appstate.bound_selector.timescale_id = timescale_id;
+	
+    	$("#bound_selector_timescales td").each(function () {
+    	    if ( this.title == timescale_id ) $(this).addClass("tsed_highlight");
+    	    else $(this).removeClass("tsed_highlight");
+    	});
+	
+	if ( api_data.timescale_bound_list[timescale_id] )
+	{
+	    fillBoundSelector(timescale_id);
+	    if ( bound_id ) highlightBoundSelectorBound(bound_id);
+	}
+	
+	else
+	{
+    	    setInnerHTML("bound_selector_bounds", "<tr><td>loading...</td></tr>");
+
+	    fetchAPIData(
+
+		'timescales/bounds.json?timescale_id=' + timescale_id,
+		
+		function ( response ) {
+		    cacheBoundData(response.records);
+		    fillBoundSelector(timescale_id);
+		    if ( bound_id ) highlightBoundSelectorBound(bound_id);
+		},
+		
+		function ( xhr ) {
+		    clearTimescaleIntervals('error', "could not load bounds for timescale '" + timescale_id + "'");
+		});
+	}
+    }
+    
+    function fillBoundSelector ( timescale_id )
+    {
+	var bound_list = api_data.timescale_bound_list[timescale_id];
+	var content = '';
+	
+	for ( var i=0; i < bound_list.length; i++ )
+	{
+	    var bound_id = bound_list[i];
+	    
+	    if ( api_data.bounds_id[bound_id] )
+		content += generateBoundTableRow( api_data.bounds_id[bound_id], 'bound_selector' );
+	    else
+		console.log("ERROR: could not find cached bound record for '" + bound_id + "'");
+	}
+	
+	setInnerHTML("bound_selector_bounds", content);
+    }
+    
+    function highlightBoundSelectorBound ( bound_id )
+    {
+	appstate.bound_selector.bound_id = bound_id;
+	
+	$("#bound_selector_bounds td").each(function () {
+    	    if ( this.title == bound_id ) $(this).addClass("tsed_highlight");
+    	    else $(this).removeClass("tsed_highlight");
+    	});
+    }
+    
+    function completeBoundEditSelector ( link_type, link_id )
     {
 	var current_id = appstate.intervals.current_bound_id;
-
+	var new_base, new_range;
+	
 	if ( current_id && link_id && appstate.intervals.bounds_id[current_id] )
 	{
-	    if ( which == 'base' )
+	    if ( link_type == 'base' )
 	    {
-		appstate.intervals.bounds_id[current_id].bid = link_id;
+		new_base = link_id;
 	    }
-
-	    else if ( which == 'range' )
+	    
+	    else if ( link_type == 'interval' )
 	    {
-		appstate.intervals.bounds_id[current_id].tid = link_id;
+		var link_record = api_data.bounds_id[link_id];
+		new_base = link_id;
+		// appstate.intervals.bounds_id[current_id].bid = link_id;
+		if ( link_record ) new_range = link_record.uid;
+		// appstate.intervals.bounds_id[current_id].tid = link_record.uid;
+	    }
+	    
+	    else if ( link_type == 'top' )
+	    {
+		// appstate.intervals.bounds_id[current_id].tid = link_id;
+		new_range = link_id;
 	    }
 	}
 	
-	checkBoundEditor('link_select');
+	checkBoundEditor('link_select', new_base, new_range);
     }
     
     // OLD STUFF BELOW:
@@ -3771,13 +4500,13 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     // 	    .fail(function ( xhr ) { display_element.innerHTML = "ERROR: could not load bounds"; failSaveBounds(xhr); });
     // }
     
-    function modalChoice ( id, value )
+    function modalChoice ( id, value, type )
     {
-    	if ( appstate[id] )
-    	    appstate[id].choice_callback(value);
+    	if ( appstate[id] && appstate[id].choice_callback )
+    	    appstate[id].choice_callback(value, type);
 	
     	else
-    	    console.log("ERROR: no appstate '" + id + "'");
+    	    console.log("ERROR: no appstate '" + id + "' or no choice_callback");
     }
 
     this.modalChoice = modalChoice;
