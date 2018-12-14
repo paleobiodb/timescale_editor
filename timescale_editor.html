@@ -80,6 +80,7 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
 		     onclick="tsapp.saveTimescaleAttrsAction()">
 	      <input type="button" class="btn" name="revert" value="Revert" 
 		     onclick="tsapp.revertTimescaleAttrsAction()">
+	      <div id="ts_attrs_msg" class="tsed_priority_message"></div>
 	    </div>
 	  <table id="ts_attrs_box" border="0" cellpadding="3">
 	    <tr><td>Timescale name:</td>
@@ -131,6 +132,7 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
 		onclick="tsapp.exportIntervalsAction()">
 	      <input type="button" class="btn" name="revert" value="Revert"
 		onclick="tsapp.revertIntervalsAction()">
+	      <div id="ts_intervals_msg" class="tsed_priority_message"></div>
 	    </div>
 	    <table id="timescale_content_box" width="100%">
 	      <tr><td class="timescale_content_cell">

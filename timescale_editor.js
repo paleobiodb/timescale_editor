@@ -407,15 +407,17 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	for ( var i=0; i < records.length; i++ )
 	{
 	    var record = records[i];
-	    var sid = record.sid;
-	    var oid = record.oid;
-
-	    // Ignore any record that doesn't have both an sid field and an oid field. Any record
-	    // that has an oid but no sid triggers a warning.
 	    
-	    if ( ! sid || ! oid )
+	    // Ignore any record that was deleted, and also ignore any record that doesn't have
+	    // both an sid field and an oid field. Any record that has an oid but no sid triggers
+	    // a warning, unless it represents a deleted record.
+	    
+	    if ( record.sta == 'deleted' )
+		continue;
+	    
+	    if ( ! record.sid || ! record.oid )
 	    {
-		if ( oid ) bad_sid = 1;
+		if ( record.oid ) bad_sid = 1;
 		continue;
 	    }
 	    
@@ -423,8 +425,8 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    
 	    // Store each bounds record in each of the appropriate arrays.
 	    
-	    api_data.timescale_bound_list[sid].push(oid);
-	    api_data.bounds_id[oid] = record;
+	    api_data.timescale_bound_list[record.sid].push(record.oid);
+	    api_data.bounds_id[record.oid] = record;
 	    
 	    // Then record all of the bounds that are referenced by this record.
 	    
@@ -1015,6 +1017,9 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	
 	if ( record.rid ) fetchTimescaleRef(record.rid);
 	else setElementValue('ts_ref', '');
+
+	if ( record.err ) setInnerHTML("ts_attrs_msg", "Some intervals are improperly defined");
+	else setInnerHTML("ts_attrs_msg", "");
     }
     
     function clearTimescaleAttrs ( arg, message )
@@ -1194,6 +1199,8 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 		var new_record = $.extend( { }, api_data.bounds_id[id]);
 		appstate.intervals.bounds.push(new_record);
 		appstate.intervals.bounds_id[id] = new_record;
+
+		if ( new_record.err ) appstate.intervals.has_error = 1;
 	    }
 	}
     }
@@ -1227,8 +1234,13 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	$("#intervals_box tr").each(function () {
 	    $(this).on("click", null, null, boundClick);
 	});
-    }
 
+	// Set or clear the has-errors message
+
+	if ( appstate.intervals.has_error ) setInnerHTML("ts_intervals_msg", "Some intervals are improperly defined");
+	else setInnerHTML("ts_intervals_msg", "");
+    }
+    
     // Build one or more sequences of intervals, each to be represented by a separate column in
     // the interval pane. If all of the intervals in this timescale fit together with no overlaps,
     // there will be only a single column. Each interval is placed in the leftmost column in which
@@ -1239,7 +1251,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     {
 	appstate.intervals.intervals = [ ];
 	appstate.intervals.intervals_id = { };
-	
+
 	appstate.intervals.columns = [ [ ] ];
 	appstate.intervals.column_max = [ 0 ];
 	
@@ -1326,9 +1338,11 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	var a = 1;	// we can stop here when debugging
     }
     
-    function selectIntervalColumn ( top_age )
+    function selectIntervalColumn ( top_age, bottom_age )
     {
 	var select_col = 0;
+
+	// 	if ( 
 	
 	while ( appstate.intervals.column_max[select_col] > top_age )
 	{
@@ -1619,8 +1633,10 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     
     function boundAgeBasisRow ( id, height_px, age, record )
     {
+	var class_str = record.err ? ' class="tsed_error"' : '';
+	
 	var content = '<tr id="' + id + '" style="height: ' + height_px + 'px; max-height: ' +
-	    height_px + 'px" title="' + record.oid + '">';
+	    height_px + 'px" title="' + record.oid + '"' + class_str + '>';
 	
 	// var content = '<tr id="' + id + '" onclick="tsapp.selectBounds(\'' + id +
 	//     '\')" style="height: ' + height_px + 'px; max-height: ' +

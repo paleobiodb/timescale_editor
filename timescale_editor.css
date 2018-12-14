@@ -9,6 +9,16 @@
     background-color: #FF7F59;
 }
 
+.tsed_priority_message {
+    text-align: center;
+    color: red;
+}
+
+.tsed_interval_error {
+    border-color: red;
+    border-width: 2px;
+}
+
 .tsed_active_save {
     background-color: #47C7EA;
 }
@@ -106,6 +116,7 @@ textarea.tsed_attr_field {
     background-color: #47C7EA;
 }
 .tsed_ages_column {
+    min-width: 500px;
     font-size: 0.8em;
     padding: 7px;
     text-align: left;
