@@ -1238,7 +1238,11 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	// Set or clear the has-errors message
 
 	if ( appstate.intervals.has_error ) setInnerHTML("ts_intervals_msg", "Some intervals are improperly defined");
-	else setInnerHTML("ts_intervals_msg", "");
+	else
+	{
+	    setInnerHTML("ts_intervals_msg", "");
+	    setInnerHTML("ts_attrs_msg", "");
+	}
     }
     
     // Build one or more sequences of intervals, each to be represented by a separate column in
@@ -1252,11 +1256,13 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	appstate.intervals.intervals = [ ];
 	appstate.intervals.intervals_id = { };
 
-	appstate.intervals.columns = [ [ ] ];
+	// appstate.intervals.columns = [ [ ] ];
 	appstate.intervals.column_max = [ 0 ];
 	
 	appstate.intervals.ages = [ ];
 	appstate.intervals.age_to_bound_id = { };
+	appstate.intervals.age_has_error = { };
+	appstate.intervals.age_multi_bounds = { };
 	
 	var bound_list = appstate.intervals.bounds;
 	var bound_lookup = appstate.intervals.bounds_id;
@@ -1269,11 +1275,26 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	for ( var i=0; i < bound_list.length; i++ )
 	{
 	    var age = bound_list[i].age;
-	    if ( age != undefined && age != "" && age_to_bound_id[age] == undefined )
+	    
+	    if ( age == undefined || age == "" ) continue;
+	    
+	    if ( age_to_bound_id[age] == undefined )
+	    {
 		age_to_bound_id[age] = bound_list[i].oid;
+	    }
+	    
+	    else
+	    {
+		if ( ! appstate.intervals.age_multi_bounds[age] )
+		    appstate.intervals.age_multi_bounds[age] = [ age_to_bound_id[age] ];
+		
+		appstate.intervals.age_multi_bounds[age].push(bound_list[i].oid);
+	    }
+
+	    if ( bound_list[i].err ) appstate.intervals.age_has_error[age] = 1;
 	}
 	
-	// Now make a sorted list of bound ages. 
+	// Now make a sorted list of bound ages.
 	
 	var age_list = [ ];
 	
@@ -1313,16 +1334,17 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 		    bound_lookup[top_id].lower_name.push(name);
 		    bound_lookup[top_id].is_top = 1;
 		    
+		    var column = selectIntervalColumn(top_age);
+		    
 		    var interval = { bottom_id: bound_id,
 				     top_id: top_id,
 				     bottom_age: age,
 				     top_age: top_age,
+				     column: column,
 				     name: name };
 		    
-		    var select_col = selectIntervalColumn(top_age);
-		    
-		    appstate.intervals.columns[select_col].push(interval);
-		    appstate.intervals.column_max[select_col] = age;
+		    // appstate.intervals.columns[select_col].push(interval);
+		    appstate.intervals.column_max[column] = age;
 		    appstate.intervals.intervals.push(interval);
 		    appstate.intervals.intervals_id[bound_id] = interval;
 		}
@@ -1338,23 +1360,21 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	var a = 1;	// we can stop here when debugging
     }
     
-    function selectIntervalColumn ( top_age, bottom_age )
+    function selectIntervalColumn ( top_age )
     {
 	var select_col = 0;
-
-	// 	if ( 
 	
-	while ( appstate.intervals.column_max[select_col] > top_age )
+	while ( ( top_age - appstate.intervals.column_max[select_col] ) < 0 )
 	{
 	    select_col++;
 	    
-	    if ( appstate.intervals.columns[select_col] == undefined )
+	    if ( appstate.intervals.column_max[select_col] == undefined )
 	    {
-		appstate.intervals.columns[select_col] = [ ];
+		// appstate.intervals.columns[select_col] = [ ];
 		appstate.intervals.column_max[select_col] = 0;
 	    }
 	}
-
+	
 	return select_col;
     }
     
@@ -1414,7 +1434,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     
     function generateIntervalDisplayContent ( )
     {
-	var columns = appstate.intervals.columns;
+	var column_max = appstate.intervals.column_max;
 	var interval_list = appstate.intervals.intervals;
 	var max_age, min_age;
 	
@@ -1478,26 +1498,42 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    // Now, for each interval column previously computed by computeIntervalStack(), we
 	    // create a table cell that itself contains a table displaying the column of intervals.
 	    
-	    for ( var i=0; i < columns.length; i++ )
+	    for ( var i=0; i < column_max.length; i++ )
 	    {
 		content += '<td class="tsed_column_container"><table class="tsed_column">' + "\n";
 		
-		var this_col = columns[i];
+		// var this_col = columns[i];
 		var last_age = min_age;
-
+		
 		// We start with a gap at the top, which will provide space for the
 		// top-of-timescale age label.
+
+		// for ( var j=0; j < interval_list.length; j++ )
+		// {
+		//     if ( interval_list[j].column == i ) break;
+		// }
 		
-		content += intervalRow('tsint_' + this_col[0].top_id, age_to_pixels[min_age], 'gap', '');
 		
-		// Then add one single-cell table row for each interval or gap in the column.
+		// Then add one single-cell table row for each interval or gap in the column,
+		// starting with a gap at the top which will provide space for the
+		// top-of-timescale age label.
+
+		var found_top = 0;
 		
-		for ( var j=0; j < this_col.length; j++ )
+		for ( var j=0; j < interval_list.length; j++ )
 		{
-		    var top_age = this_col[j].top_age;
-		    var bottom_age = this_col[j].bottom_age;
-		    var top_id = this_col[j].top_id;
-		    var bottom_id = this_col[j].bottom_id;
+		    if ( interval_list[j].column != i ) continue;
+
+		    if ( ! found_top )
+		    {
+			content += intervalRow('tsint_' + interval_list[j].top_id, age_to_pixels[min_age], 'gap', '');
+			found_top = 1;
+		    }
+		    
+		    var top_age = interval_list[j].top_age;
+		    var bottom_age = interval_list[j].bottom_age;
+		    var top_id = interval_list[j].top_id;
+		    var bottom_id = interval_list[j].bottom_id;
 		    
 		    // If the top age of the current interval is not equal to the bottom age of
 		    // the previous one, we add a gap row.
@@ -1512,7 +1548,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 		    
 		    var interval_height = age_to_pixels[bottom_age] - age_to_pixels[top_age];
 		    
-		    content += intervalRow('tsint_' + bottom_id, interval_height, 'interval', this_col[j].name);
+		    content += intervalRow('tsint_' + bottom_id, interval_height, 'interval', interval_list[j].name);
 		    
 		    last_age = bottom_age;
 		    
@@ -1564,9 +1600,33 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 		
 		var bound_id = appstate.intervals.age_to_bound_id[this_age];
 		var bound_record = bound_id ? bound_lookup[bound_id] : { "error": 1 };
+		// var age_has_error = 0;
+		
+		// if ( appstate.intervals.age_multi_bounds[this_age] )
+		// {
+		//     var multi_list = appstate.intervals.age_multi_bounds[this_age];
+		    
+		//     for ( var k=0; k<multi_list.length; k++ )
+		//     {
+		// 	var other_id = multi_list[i];
+		// 	if ( other_id && bound_lookup[other_id] && bound_lookup[other_id].err )
+		// 	    age_has_error = 1;
+		//     }
+		// }
+
+		// else if ( bound_record )
+		// {
+		//     if ( bound_record.err ) age_has_error = 1;
+		// }
+
+		// else
+		// {
+		//     age_has_error = 1;
+		// }
 		
 		ruler_column += boundMarkRow('tsmark_' + bound_id, mark_height);
-		ages_column += boundAgeBasisRow('tsbound_' + bound_id, age_height, age_list[j], bound_record);
+		ages_column += boundAgeBasisRow('tsbound_' + bound_id, age_height, this_age, bound_record,
+						appstate.intervals.age_has_error[this_age]);
 		
 		last_age = this_age;
 	    }
@@ -1631,9 +1691,9 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     // Return the HTML code for one multi-cell table row displaying a boundary age and the basis
     // for that age.
     
-    function boundAgeBasisRow ( id, height_px, age, record )
+    function boundAgeBasisRow ( id, height_px, age, record, has_error )
     {
-	var class_str = record.err ? ' class="tsed_error"' : '';
+	var class_str = has_error ? ' class="tsed_bound_error"' : '';
 	
 	var content = '<tr id="' + id + '" style="height: ' + height_px + 'px; max-height: ' +
 	    height_px + 'px" title="' + record.oid + '"' + class_str + '>';
@@ -1798,7 +1858,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	if ( ! appstate.intervals.dirty ) return;
 	
 	// Check that the list of bounds meets the validity criteria.
-
+	
 	if ( validateBoundsList() ) return;
 	
 	// Now construct a list of update records which will be submitted to the API.
@@ -1850,7 +1910,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 		has_update = 1;
 	    }
 	    
-	    if ( app_record.btp != 'fraction' && db_record.frc != '' ) {
+	    if ( app_record.btp != 'fraction' && db_record.frc != '' && db_record.frc != undefined ) {
 		update_record.frc = '';
 		has_update = 1;
 	    }
@@ -1915,88 +1975,286 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     {
 	var bounds_list = appstate.intervals.bounds;
 	var bounds_id = appstate.intervals.bounds_id;
+
+	return;
 	
 	// Go through the bounds one by one, and check that they make sense. If we find any
 	// problems, highlight that bound and display an alert.
 	
-	for ( var i=0; i < bounds_list.length; i++ )
-	{
-	    var age = bounds_list[i].age;
-	    var top_id = bounds_list[i].uid;
-	    var base_id = bounds_list[i].bid;
-	    var range_id = bounds_list[i].tid;
-	    var type = bounds_list[i].btp;
-	    var top_age, base_age, range_age;
-	    
-	    if ( top_id ) top_age = bounds_id[top_id].age;
-	    
-	    if ( age == undefined || age == '' )
-	    {
-		continue;
-	    }
-	    
-	    // Otherwise make sure that the age is not less than the age of the bound marked as
-	    // the top of its interval, if there is one.
-	    
-	    if ( top_age != undefined && age <= top_age )
-	    {
-		return boundFail(bounds_list[i], "must have an age greater than its next higher bound");
-	    }
-	    
-	    // If the bound type is 'same', make sure we have a bound id and that the age matches up.
-	    
-	    if ( type == 'same' )
-	    {
-		if ( base_id == undefined )
-		{
-		    return boundFail(bounds_list[i], "has bound type 'same' so must have a base bound");
-		}
+	// for ( var i=0; i < bounds_list.length; i++ )
+	// {
+	//     if ( bounds_list[i].invalid )
 		
-		var base_record = appstate.intervals.bounds_id[base_id] || api_data.bounds_id[base_id];
-		
-		if ( base_record == undefined )
-		{
-		    return boundFail(bounds_list[i], ": base bound '" + base_id + "' cannot be found");
-		}
-		
-		if ( base_record.age != age )
-		{
-		    return boundFail(bounds_list[i], ": age of base bound does not match age of this one");
-		}
-	    }
+	// }
+	
+	    // var age = bounds_list[i].age;
+	    // var top_id = bounds_list[i].uid;
+	    // var base_id = bounds_list[i].bid;
+	    // var range_id = bounds_list[i].tid;
+	    // var type = bounds_list[i].btp;
+	    // var top_age, base_age, range_age;
 	    
-	    else if ( type == 'fraction' )
-	    {
-		if ( base_id == undefined )
-		{
-		    return boundFail(bounds_list[i], "has bound type 'same' so must have a base bound");
-		}
+	    // if ( top_id ) top_age = bounds_id[top_id].age;
+	    
+	    // if ( age == undefined || age == '' )
+	    // {
+	    // 	continue;
+	    // }
+	    
+	    // // Otherwise make sure that the age is not less than the age of the bound marked as
+	    // // the top of its interval, if there is one.
+	    
+	    // if ( top_age != undefined && age <= top_age )
+	    // {
+	    // 	return boundFail(bounds_list[i], "must have an age greater than its next higher bound");
+	    // }
+	    
+	    // // If the bound type is 'same', make sure we have a bound id and that the age matches up.
+	    
+	    // if ( type == 'same' )
+	    // {
+	    // 	if ( base_id == undefined )
+	    // 	{
+	    // 	    return boundFail(bounds_list[i], "has bound type 'same' so must have a base bound");
+	    // 	}
 		
-		var base_record = appstate.intervals.bounds_id[base_id] || api_data.bounds_id[base_id];
+	    // 	var base_record = appstate.intervals.bounds_id[base_id] || api_data.bounds_id[base_id];
 		
-		if ( base_record == undefined )
-		{
-		    return boundFail(bounds_list[i], ": base bound '" + base_id + "' cannot be found");
-		}
+	    // 	if ( base_record == undefined )
+	    // 	{
+	    // 	    return boundFail(bounds_list[i], ": base bound '" + base_id + "' cannot be found");
+	    // 	}
+		
+	    // 	if ( base_record.age != age )
+	    // 	{
+	    // 	    return boundFail(bounds_list[i], ": age of base bound does not match age of this one");
+	    // 	}
+	    // }
+	    
+	    // else if ( type == 'fraction' )
+	    // {
+	    // 	if ( base_id == undefined )
+	    // 	{
+	    // 	    return boundFail(bounds_list[i], "has bound type 'same' so must have a base bound");
+	    // 	}
+		
+	    // 	var base_record = appstate.intervals.bounds_id[base_id] || api_data.bounds_id[base_id];
+		
+	    // 	if ( base_record == undefined )
+	    // 	{
+	    // 	    return boundFail(bounds_list[i], ": base bound '" + base_id + "' cannot be found");
+	    // 	}
 
-		if ( base_record.age < age )
-		{
-		    return boundFail(bounds_list[i], ": age of base bound must be less than the age of this one");
-		}
+	    // 	if ( base_record.age < age )
+	    // 	{
+	    // 	    return boundFail(bounds_list[i], ": age of base bound must be less than the age of this one");
+	    // 	}
 		
-		var range_record = appstate.intervals.bounds_id[range_id] || api_data.bounds_id[range_id];
+	    // 	var range_record = appstate.intervals.bounds_id[range_id] || api_data.bounds_id[range_id];
 		
-		if ( range_record == undefined )
-		{
-		    return boundFail(bounds_list[i], ": range bound '" + range_id + "' cannot be found");
-		}
+	    // 	if ( range_record == undefined )
+	    // 	{
+	    // 	    return boundFail(bounds_list[i], ": range bound '" + range_id + "' cannot be found");
+	    // 	}
 		
-		if ( range_record.age > age )
+	    // 	if ( range_record.age > age )
+	    // 	{
+	    // 	    return boundFail(bounds_list[i], ": age of range bound must be less than the age of this one");
+	    // 	}
+	    // }
+    }
+
+    // If the specified bound record is valid, return undefined. Otherwise, return true to
+    // indicate that the record has errors. If 'errors' is defined, it must be an array
+    // reference. A list of error messages will be pushed to it. If 'highlight' is defined, it
+    // must be an object reference. One or more of the keys 'top', 'age', 'type', 'base', 'range',
+    // 'frac' may be given true values to indicate where errors were found.
+    
+    function validateBound ( bound_record, current_bound_by_id, errors, highlight )
+    {
+	var age = bound_record.age;
+	var top_id = bound_record.uid;
+	var base_id = bound_record.bid;
+	var range_id = bound_record.tid;
+	var type = bound_record.btp;
+	var top_age, base_age, range_age;
+	
+	// Clear the 'invalid' flag for this bound. We will re-establish it if any errors are found.
+	
+	delete bound_record.invalid;
+	
+	// If the bound has an empty age, ignore it. Any bound that has an empty age will be
+	// deleted when changes are saved to the database.
+	
+	if ( age == undefined || age == '' )
+	{
+	    return;
+	}
+	
+	// If the bound is linked to a next-up bound, then make sure the link is valid. If it is,
+	// check that the next-up age is actually less than the age of the bound being checked.
+	
+	if ( top_id )
+	{
+	    if ( current_bound_by_id[top_id] == undefined )
+	    {
+		if ( errors ) errors.push("next-up bound '" + top_id + "' was not found");
+		if ( highlight ) highlight.top = 1;
+		bound_record.invalid = 1;
+	    }
+	    
+	    else
+	    {
+		top_age = current_bound_by_id[top_id].age;
+		
+		if ( top_age == undefined || Number(age) <= Number(top_age) )
 		{
-		    return boundFail(bounds_list[i], ": age of range bound must be less than the age of this one");
+		    if ( errors ) errors.push("must have an age greater than its next higher bound");
+		    if ( highlight ) highlight.top = 1;
+		    bound_record.invalid = 1;
 		}
 	    }
 	}
+
+	// If the bound type is 'same', make sure we have a bound id and that the age matches up.
+
+	if ( type == 'same' )
+	{
+	    if ( base_id == undefined )
+	    {
+		if ( errors ) errors.push("has bound type 'same', so must have a base bound");
+		if ( highlight ) highlight.base = 1;
+		bound_record.invalid = 1;
+	    }
+
+	    else
+	    {
+		var base_record = current_bound_by_id[base_id] || api_data.bounds_id[base_id];
+		
+		if ( base_record == undefined )
+		{
+		    if ( errors ) errors.push("base bound '" + base_id + "' was not found");
+		    if ( highlight ) highlight.base = 1;
+		    bound_record.invalid = 1;
+		}
+		
+		else if ( Number(base_record.age) != Number(age) )
+		{
+		    if ( errors ) errors.push("age of base bound does not match age of this one");
+		    if ( highlight ) highlight.base = 1;
+		    bound_record.invalid = 1;
+		}
+	    }
+	}
+	
+	else if ( type == 'fraction' )
+	{
+	    var base_age, range_age;
+	    
+	    if ( base_id == undefined )
+	    {
+		if ( errors ) errors.push("has bound type 'fraction', so must have a base bound");
+		if ( highlight ) highlight.base = 1;
+		bound_record.invalid = 1;
+	    }
+	    
+	    else
+	    {
+		var base_record = current_bound_by_id[base_id] || api_data.bounds_id[base_id];
+		
+		if ( base_record == undefined )
+		{
+		    if ( errors ) errors.push("base bound '" + base_id + "' was not found");
+		    if ( highlight ) highlight.base = 1;
+		    bound_record.invalid = 1;
+		}
+		
+		else if ( Number(base_record.age) < Number(age) )
+		{
+		    if ( errors ) errors.push("age of base bound must be greater than or equal to age of this one");
+		    if ( highlight ) highlight.base = 1;
+		    bound_record.invalid = 1;
+		}
+
+		else if ( base_record.age != undefined && base_record.age != '' )
+		{
+		    base_age = base_record.age;
+		}
+	    }
+
+	    if ( range_id == undefined )
+	    {
+		if ( errors ) errors.push("has bound type 'fraction', so must have a range bound");
+		if ( highlight ) highlight.range = 1;
+		bound_record.invalid = 1;
+	    }
+
+	    else
+	    {
+		var range_record = current_bound_by_id[range_id] || api_data.bounds_id[range_id];
+		
+		if ( range_record == undefined )
+		{
+		    if ( errors ) errors.push("range bound '" + range_id + "' was not found");
+		    if ( highlight ) highlight.range = 1;
+		    bound_record.invalid = 1;
+		}
+		
+		else if ( Number(range_record.age) > Number(age) )
+		{
+		    if ( errors ) errors.push("age of range bound must be less than or equal to age of this one");
+		    if ( highlight ) highlight.range = 1;
+		    bound_record.invalid = 1;
+		}
+		
+		else if ( range_record.age != undefined && range_record.age != '' )
+		{
+		    range_age = range_record.age;
+		}
+	    }
+	    
+	    if ( bound_record.frc == undefined || bound_record.frc == '' )
+	    {
+		if ( errors ) errors.push("bound type is 'fraction', but fraction is empty");
+		if ( highlight ) highlight.frac = 1;
+		bound_record.invalid = 1;
+	    }
+	    
+	    else if ( ! ( Number(bound_record.frc) >= 0 && Number(bound_record.frc) <= 1 ) )
+	    {
+		if ( errors ) errors.push("invalid fraction, must be between zero and one");
+		if ( highlight ) highlight.frac = 1;
+		bound_record.invalid = 1;
+	    }
+
+	    else if ( base_age != undefined && range_age != undefined )
+	    {
+		var calculated_age = base_age - bound_record.frc * ( base_age - range_age );
+
+		if ( Number.isNaN(calculated_age) )
+		{
+		    if ( errors ) errors.push("age calculated from fraction gives NaN");
+		    if ( highlight ) highlight.frac = 1;
+		    bound_record.invalid = 1;
+		}
+
+		else if ( Math.abs(age - calculated_age) > 0.1 )
+		{
+		    if ( errors ) errors.push("age calculated from fraction does not match bound age");
+		    if ( highlight ) highlight.frac = 1;
+		    bound_record.invalid = 1;
+		}
+	    }
+	}
+
+	else if ( type != 'absolute' && type != 'spike' )
+	{
+	    if ( errors ) errors.push("invalid bound type '" + type + "'");
+	    if ( highlight ) highlight.type = 1;
+	    bound_record.invalid = 1;
+	}
+	
+	return bound_record.invalid;
     }
     
     function boundFail ( bound_record, message )
@@ -2477,6 +2735,8 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	{
 	    setElementValue("ia_age_" + i, '');
 	    setElementValue("ia_name_" + i, '');
+	    setElementValue("ia_frac_" + i, '');
+	    setElementValue("ia_select_" + i, 'absolute');
 	}
     }
 
@@ -2752,9 +3012,31 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	$("#be_fraction").removeClass('tsed_error');
 	$("#be_intname").removeClass('tsed_error');
 	
-	// Then fill in the form using the bound record. First the title.
-	
-	setElementContent("be_title", bound_record.oid);
+	// Then fill in the form using the bound record. First the bound identifier. If there is
+	// more than one for this age, make it a drop-down menu.
+
+	if ( bound_record.age != undefined && appstate.intervals.age_multi_bounds[bound_record.age] )
+	{
+	    var multi_list = appstate.intervals.age_multi_bounds[bound_record.age];
+	    var content = '<select id="be_multi" onchange="tsapp.checkBoundEditor(\'multi\')">';
+	    
+	    for ( var i=0; i < multi_list.length; i++ )
+	    {
+		var selected = multi_list[i] == bound_record.oid ? ' selected' : '';
+		content += '<option value="' + multi_list[i] + '"' + selected + '>' + multi_list[i] + '</option>';
+	    }
+
+	    content += '</select>';
+
+	    setElementContent("be_bound_id", "");
+	    setInnerHTML("be_bound_id", content);
+	}
+
+	else
+	{
+	    setInnerHTML("be_bound_id", "");
+	    setElementContent("be_bound_id", bound_record.oid);
+	}
 	
 	// Then the upper interval.
 	
@@ -2992,7 +3274,7 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
     {
 	if ( ! message ) message = '';
 	setElementContent('be_error_msg', message);
-	setElementContent('be_title', '');
+	setElementContent('be_bound_id', '');
 	setElementValue('be_top_bound', '');
 	setElementValue('be_intname', '');
 	setElementValue('be_lower', '');
@@ -3027,10 +3309,19 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	var redisplay_bound, redisplay_interval, redisplay_all;
 	
 	// If we are not editing an interval, just return.
-
+	
 	if ( current_id == undefined ) return;
 	
-	// First update the local record for this bound. Depending on the bound type, updating one
+	// If the 'multi' selector was chosen, switch to editing a different bound.
+
+	if ( changed == 'multi' )
+	{
+	    var new_id = 'tsbound_' + getElementValue("be_multi");
+	    selectBounds(new_id);
+	    return;
+	}
+	
+	// Otherwise, update the local record for this bound. Depending on the bound type, updating one
 	// attribute may cause others to change as well.
 	
 	if ( changed == 'age' )
