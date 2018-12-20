@@ -119,9 +119,11 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	var content;
 	
 	content = makeOptionList( [ '', '--',
-				    'eon', 'eons', 'era','eras', 'period', 'periods',
-				    'epoch','epochs', 'stage', 'stages', 'substage', 'substages',
-				    'zone', 'zones', 'multi', 'multiple', 'other', 'other' ] );
+				    'supereon', 'supereons', 'eon', 'eons',
+				    'era', 'eras', 'period', 'periods', 'superepoch', 'superepochs',
+				    'epoch', 'epochs', 'subepoch', 'subepochs',
+				    'stage', 'stages', 'substage', 'substages',
+				    'zone', 'zones', 'chron', 'chrons', 'multi', 'multiple' ] );
 	
 	setInnerHTML("ts_type", content);
 	
@@ -821,12 +823,12 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    window.alert("You must specify a timescale name");
 	    return;
 	}
-
-	if ( ! appstate.ts_attrs.typ )
-	{
-	    window.alert("You must specify a timescale type");
-	    return;
-	}
+	
+	// if ( ! appstate.ts_attrs.typ )
+	// {
+	//     window.alert("You must specify a timescale type");
+	//     return;
+	// }
 	
 	// Now construct a record which will be submitted to the API.
 	
@@ -853,8 +855,8 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    
 	    new_record.is_visible = appstate.ts_attrs.vis;
 	    new_record.is_enterable = appstate.ts_attrs.enc;
-	    new_record.admin_lock = appstate.ts_attrs.lck;
-
+	    // new_record.admin_lock = appstate.ts_attrs.lck;
+	    
 	    if ( appstate.ts_attrs.pri != '' && appstate.ts_attrs.pri != 0 )
 		new_record.priority = appstate.ts_attrs.pri;
 	}
