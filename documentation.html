@@ -1,0 +1,168 @@
+<!-- This web page documents the data model for timescales the Paleobiology Database, -->
+<!-- and the application that allows them to be created and edited. -->
+<!-- Author: Michael McClennen -->
+
+<link rel="stylesheet" type="text/css" href="%%app_resources%%/timescale_editor.css">
+
+<style>
+  td { vertical-align: top;
+  font-size: 0.9em; }
+  li { font-size: 0.9em; }
+</style>
+
+<!-- Section I of the application pane, with heading and explanatory note. -->
+
+<div name="documentation" style="margin-left: 1em; margin-right: 1em;">
+
+  <p align="center" class="pageTitle" style="margin-top: 10px; margin-bottom: 10px">Timescale Data Model</p>
+
+  <h2>Overview</h2>
+  
+  <p class="small">The timescale data model consists of three data types: <em>timescales</em>,
+  <em>interval boundaries</em>, and <em>intervals</em>. Each timescale has its own record in the
+  <code>timescales</code> table, and contains a set of interval boundaries which are stored in the
+  <code>timescale_bounds</code> table. The attributes of each interval, including its name,
+  are stored in the record that represents its lower boundary. Most timescales are divided into an
+  unbroken sequence of intervals, but the model is flexible enough to allow gaps and overlapping
+  intervals wherever those are appropriate. In particular, some of the historical timescales
+  define multiple names for the same span of geological time. This means that a given timescale
+  may contain multiple boundary records with the same geological age, representing the lower
+  boundaries of multiple interval definitions that have the same bottom age.</p>
+  
+  <p class="small">Interval names need only be unique within a single timescale, and the same name
+  will often be defined in multiple timescales. Each timescale has a "priority" attribute, which
+  is used to resolve conflicts between the multiple definitions of a given interval. The
+  international timescales are initialized with a priority of 10, and all other timescales can
+  have a priority of at most 9. In general, the priority of other timescales can be adjusted so
+  that authoritative and up-to-date definitions have the highest priority.</p>
+  
+  <p class="small">Each unique interval name is represented by a single record in the
+  <code>timescale_ints</code> table, and its attributes are taken from the highest-priority
+  timescale in which that interval name is defined. These interval records are then used by the
+  rest of the Paleobiology Database. The <em>intervals</em> table, consequently, serves as the
+  interface between the timescale subsystem and the database as a whole. The intervals table is only updated
+  when the <em>define intervals</em> operation is invoked on a particular timescale. At that point, all
+  interval definitions from that timescale that do not conflict with definitions in a
+  higher-priority timescale are copied over from the boundaries table to the intervals table. Any
+  interval names which were previously defined from that timescale and are no longer present in it
+  are removed.</p>
+  
+  <h2>Timescales</h2>
+  
+  <p class="small">Each timescale is required to have a name. When a new timescale is created, it
+    is assigned a unique identifier which will look like <code>tsc:nnnn</code>,
+    where <em>nnnn</em> is a unique positive integer. Each timescale may be assigned a set of
+    descriptive attributes including the type of interval it contains, its geological extent, and
+    the taxon if any used to define it. These attributes can be used to construct a description of
+    the time scale, i.e. "North American mammal stages". A timescale may also be associated with a
+    bibliographic reference, just like most of the other data types in the Paleobiology
+    Database.</p>
+  
+  <h2>Interval boundaries</h2>
+  
+  <p class="small">Each interval boundary is required to have an age, specified in Ma. When each
+    new boundary is created, it is assigned a unique identifier which will look like
+    <code>bnd:nnnn</code>, where <em>nnnn</em> is a unique positive integer. Each boundary may have
+    a name associated with it, and this is taken to be the name of the interval <em>above the
+    boundary</em>. Any boundary that does not have a name represents either the top of the timescale
+    or else an interval top boundary that does not correspond to the bottom boundary of some
+    other interval. This may happen if there are gaps in the timescale, or else if the timescale
+    contains overlapping intervals. In timescales with overlapping intervals, it is possible to have
+    multiple boundaries with the same geological age, each representing an alternate interval name
+    whose bottom age is that age. A good example of this is provided by the timescale <em>British
+    Ordovician Stages</em>.</p>
+  
+  <p class="small">Each interval boundary that has a name, and thus represents the bottom boundary
+    of an interval, is linked to another boundary with a more recent age which represents the
+    corresponding top boundary. It will often be the case that this linked boundary in turn is the
+    bottom boundary of another interval. A timescale that consists of an unbroken sequence of
+    <em>n</em> intervals will thus contain <em>n+1</em> boundaries, one for the top boundary of the
+    top interval and one for the bottom boundary of each of the intervals. Each boundary is linked
+    to the boundary of the next-higher interval. The top boundary will be
+    distinguished by having an empty interval name and an empty top link.</p>
+  
+  <p class="small">The age of an interval boundary can either be specified absolutely or else by
+    reference to a boundary or interval from another timescale. This feature allows boundaries to be specified
+    relative to the international stages, and can also be used in other ways as well. In particular,
+    there are four distinct types of boundaries:</p>
+  
+  <table cellpadding="10">
+    <tr><td><strong>absolute</strong></td>
+      <td>The age of an absolute boundary is specified directly in Ma. A &plusmn;
+	uncertainty can also be specified if appropriate.</td></tr>
+    <tr><td><strong>spike</strong></td>
+      <td>This boundary type is used for GSSPs. It is identical to "absolute", except that a
+      boundary of this type is marked by the 
+	<em>is_spike</em> flag, and so are all others that are
+	linked to it by the <em>same as</em> relation. The only timescale that should contain
+	spike bounds is the <em>International Stages</em>.</td></tr>
+    <tr><td><strong>same&nbsp;as</strong></td>
+      <td>A bound of this type is defined to have the same age as some basis boundary in another
+      timescale. In many (most?) cases the basis boundary will be one of the international stage
+      boundaries. The age of a boundary of this type will be automatically updated by the system
+      whenever the age of the basis boundary changes.</td></tr>
+    <tr><td><strong>modeled&nbsp;as</strong></td>
+      <td>A bound of this type is defined to be some fraction of the way through an interval or
+	contiguous range of intervals in another timescale. In many (most?) cases this will be one
+	of the international stages. An interval of this type is typically given an absolute age
+	when first defined, and the corresponding fraction will be automatically computed as soon as
+	the basis interval is selected. The age of a boundary of this type will be automatically
+	updated by the system whenever the top or bottom boundary age of the basis interval
+	changes. A new boundary age will be computed using the fraction already stored for this
+	boundary and the new top and bottom ages. The timescale editor also allows you to change
+	either the fraction or the age of the boundary directly. In either case, the other figure will be
+	updated to match. A &plusmn; uncertainty can also be specified for this bound, and it
+	will remain unchanged if the age is recomputed.</td></tr>
+  </table>
+
+  <p class="small">The set of boundaries in a timescale are checked according to the following
+    criteria. Any bound that fails one or more of these has the <em>error</em> flag set. Any
+    timescale which has one or more bounds in error will also be flagged. The timescale editor
+    application will catch most errors and prevent saving changes until they are fixed. The criteria
+    are:
+    
+    <ol>
+      <li>Every bound must have an age.</li>
+      <li>Every bound that has a non-empty interval name must also have a top-bound link
+	pointing to another bound in the same timescale. The linked top bound must have a more
+	recent age.</li>
+      <li>Every bound of type <strong>same as</strong> must have a basis-bound link to
+	another bound in either the same or a different timescale.</li>
+      <li>Every bound of type <strong>modeled as</strong> must have both a basis-bound link and a
+	range-bound link. These two links point to the bottom and top of the interval in which
+	this bound is modeled.  Each bound must also have a fraction value between 0 and 1.</li>
+    </ol>
+    
+    <p class="small">Each bound can also be associated with a color, which will apply to the
+    interval immediately above it. Currently, there is no way to edit these using the timescale
+    editor app. The international stages, epochs, etc. are initialized with their proper colors.</p>
+    
+  <h2>Intervals</h2>
+
+  <p class="small">Once a timescale is created and populated with interval boundaries, these
+    boundaries can then be used to define a set of records in the intervals
+    table, <code>timescale_ints</code>. The <em>define intervals</em> operation can be carried
+    out on any timescale, at any time. If you change the boundary definitions, you can carry out
+    this operation again to update all of the intervals defined by this timescale to the new
+    definitions. This operation will be blocked, however, if the timescale contains any errors.</p>
+
+  <p class="small">The timescale_ints table contains one record for each unique interval name in
+    the entire database. Whenever a new interval is defined, it is automatically assigned an
+    identifier which looks like <code>int:nnnn</code>, where <em>nnnn</em> is a unique positive
+    integer. This table has been initialized with all of the intervals previously in use in the
+    Paleobiology Database, along with the existing interval numbers and names. So any references to existing
+    intervals will continue to work without change.</p>
+  
+  <p class="small">For intervals which are only defined in one timescale, the <em>define</em>
+    operation simply creates or updates the corresponding interval record with the ages of its
+    upper and lower bounds. If you delete an interval from a timescale and then re-execute
+    the <em>define</em> operation, that interval record will be completely deleted from the
+    system. For interval names which occur in more than one timescale, the timescale with the
+    highest priority will have precedence. In case of ties, the timescale with the lower
+    identifier (which means it was created first) will have precedence. The <em>define</em>
+    operation will never override or delete any interval definition associated with a higher-precedence
+    timescale.</p>
+    
+
+</div>
+

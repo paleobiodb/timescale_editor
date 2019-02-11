@@ -35,10 +35,13 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
   
   <p class="small"> This web app allows you to edit timescales in the Paleobiology Database.
   Its functionality is based on the PBDB
-  <a class="dlBoldURL" target="_blank" href="%%data_url%%">data service</a>.</p>
-
+  <a target="_blank" href="%%data_url%%">data service</a>. The Timescale Attributes
+  pane allows you to create new timescales and edit their properties, while the Intervals pane allows
+  you to add, delete, and edit interval boundaries.</p>
+  
   <p class="small">To learn more about the various parts of this form, use the
-  <img width="16" height="16" src="/JavaScripts/img/hidden_help.png"> buttons.</p>
+  <img width="16" height="16" src="%%app_resources%%/hidden_help.png"> buttons. You can also
+  view the <a target="_blank" href="timescale_editor/documentation">documentation of the data model</a></p>
   
 </div>
 
@@ -51,7 +54,7 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
   Initializing form, please wait...</span>
 </div>
 
-<!-- This section defines the mane editing pane, which is divided into two subpanes: one for -->
+<!-- This section defines the main editing pane, which is divided into two subpanes: one for -->
 <!-- editing timescale attributes, and one for the intervals and interval boundaries. -->
 
 <div name="editor" id="editor">
@@ -71,21 +74,23 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
 	<form id="ts_attrs_form" name="ts_attrs_form">
 	    <div class="btn-holder">
 	      <input type="button" class="btn" name="open" value="Open timescale" 
-		     onclick="tsapp.openTimescaleAction()">
+		     onclick="tsapp.openTimescaleAction()"/>
 	      <input type="button" class="btn" name="new" value="New timescale" 
-		     onclick="tsapp.newTimescaleAction()">
+		     onclick="tsapp.newTimescaleAction()"/>
 	      <input type="button" class="btn" name="delete" value="Delete timescale" 
-		     onclick="tsapp.deleteTimescaleAction()">
+		     onclick="tsapp.deleteTimescaleAction()"/>
 	      <input type="button" class="btn" name="save" value="Save changes" 
-		     onclick="tsapp.saveTimescaleAttrsAction()">
+		     onclick="tsapp.saveTimescaleAttrsAction()"/>
 	      <input type="button" class="btn" name="revert" value="Revert" 
-		     onclick="tsapp.revertTimescaleAttrsAction()">
+		     onclick="tsapp.revertTimescaleAttrsAction()"/>
+	      <img id="toggle_help_a" class="tsed_helpselect" onClick="tsapp.helpClick('help_a', event)"
+		     src="%%app_resources%%/hidden_help.png" width=16 height=16/>
 	      <div id="ts_attrs_msg" class="tsed_priority_message"></div>
 	    </div>
 	  <table id="ts_attrs_box" border="0" cellpadding="3">
 	    <tr><td>Timescale name:</td>
 	        <td><input id="ts_name" type="text" size="60" onchange="tsapp.checkTimescaleAttrs()"/>
-		</td></tr>
+	    </td></tr>
 	    <tr><td>Timescale id:</td>
 		<td><input id="ts_id" type="text" size="8" disabled/> &nbsp;&nbsp;
 		    <input id="ts_visible" type="checkbox" onchange="tsapp.checkTimescaleAttrs()"/> Visible &nbsp;&nbsp;
@@ -93,59 +98,110 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
 		    <input id="ts_locked" type="checkbox" onchange="tsapp.checkTimescaleAttrs()"/> Locked &nbsp;&nbsp;
 		    Priority: <select id="ts_priority" onchange="tsapp.checkTimescaleAttrs()">
 			      <option value="">--</option></select>
-	        </td></tr>
+	    </td></tr>
+	    <tr class="tsed_help_a"><td colspan="2">
+	      <p class="tsed_help">The value of <code>timescale id</code> is set automatically when a new
+	      timescale is created, and cannot be changed. The <code>visible</code> and <code>enterable</code> flags are
+	      not active yet, but in the future will control which timescales are listed on the collection entry page
+	      and which can be passed as parameters to API calls. If you set the <code>locked</code> flag on a timescale
+	      created by you, then nobody will be able to edit this timescale except for you, your enterers, and people
+	      who have administrative privilege on the timescales table.</p>	      
+	    </td></tr>
 	    <tr><td>Age range:</td>
 	        <td><input id="ts_min_age" type="text" size="10" disabled/> through
 		    <input id="ts_max_age" type="text" size="10" disabled/> &nbsp;&nbsp;
 		    Timescale type: 
 		    <select id="ts_type" onchange="tsapp.checkTimescaleAttrs()"></select> &nbsp;&nbsp;
-		</td></tr>
+	    </td></tr>
+	    <tr class="tsed_help_a"><td colspan="2">
+	      <p class="tsed_help">The <code>age range</code> is set automatically when you enter interval boundaries
+	      for this timescale, and cannot be changed on this panel. The <code>timescale type</code> is optional,
+	      and should be set if the timescale will contain only a single type of interval. If the timescale
+	      has multiple types of intervals, you can choose the 'multiple' option.</p>
+	    </td></tr>
 	    <tr><td>Timescale extent:</td>
 	        <td><input id="ts_extent" type="text" size="60" onchange="tsapp.checkTimescaleAttrs()"/>
 		</td></tr>
+	    <tr class="tsed_help_a"><td colspan="2">
+	      <p class="tsed_help">The <code>timescale extent</code> should indicate the geographical extent
+	      over which this timescale is valid, i.e. "Global", "North American", etc. The value of
+	      this field should be capitalized.</p>
+	        </td></tr>
 	    <tr><td>Timescale taxon:</td>
 	        <td><input id="ts_taxon" type="text" size="60" onchange="tsapp.checkTimescaleAttrs()"/>
-	        </td></tr>
+	    </td></tr>
+	    <tr class="tsed_help_a"><td colspan="2">
+	      <p class="tsed_help">The <code>timescale taxon</code> should be left blank except for
+	      timescales based on a specific taxon, i.e. "mammal", "conodont". The value of this field
+	      should be singular and <strong>not</strong> be capitalized.</p>
+	    </td></tr>
 	    <tr><td>Timescale reference:</td>
 	        <td><input id="ts_refid" type="text" size="10" onchange="tsapp.checkTimescaleAttrs()">
-	        </td></tr>
+	    </td></tr>
 	    <tr><td></td><td><textarea id="ts_ref" class="tsed_attr_field" rows=2 disabled></textarea>
 		</td></tr>
+	    <tr class="tsed_help_a"><td colspan="2">
+	      <p class="tsed_help">You may enter a PBDB reference number or identifier into the
+	      <code>timescale reference</code> field. If the number is valid, the formatted citation
+	      will appear in the large box below it. This reference will then be associated with this
+	      timescale. To remove this association, clear the timescale reference field.</p>
+	    </td></tr>
 	    <tr><td>Timescale comments:</td>
 	        <td><textarea id="ts_comments" class="tsed_attr_field" rows=2
 		     onchange="tsapp.checkTimescaleAttrs()"></textarea>
-		</td></tr>
+	    </td></tr>
+	    <tr class="tsed_help_a"><td colspan="2">
+	      <p class="tsed_help">You may enter arbitrary text into the <code>timescale comments</code>
+	      field. You can include notes about the timescale, warn other people that you are in the
+	      process of entering it, etc.</p>
+	    </td></tr>
 	</table>
 	</form>
 	</td>
       <td id="intervals_pane" style="vertical-align: top; height: 500px; display: none">
 	<form id="intervals_form" name="intervals_form">
-	    <h3 class="tsed_box_header" id="ts_name_intervals"></h3>
 	    <div class="btn-holder">
 	      <input type="button" class="btn" name="open" value="Open timescale"
-		onclick="tsapp.openTimescaleAction()">
+		onclick="tsapp.openTimescaleAction()"/>
 	      <input type="button" class="btn" name="add" value="Add intervals"
-		onclick="tsapp.addIntervalsAction()">
+		onclick="tsapp.addIntervalsAction()"/>
 	      <input type="button" class="btn" name="save" value="Save changes"
-		onclick="tsapp.saveIntervalsAction()">
-	      <input type="button" class="btn" name="export" value="Export intervals"
-		onclick="tsapp.exportIntervalsAction()">
+		onclick="tsapp.saveIntervalsAction()"/>
+	      <input type="button" class="btn" name="export" value="Define intervals"
+		onclick="tsapp.defineIntervalsAction()"/>
 	      <input type="button" class="btn" name="revert" value="Revert"
-		onclick="tsapp.revertIntervalsAction()">
+		onclick="tsapp.revertIntervalsAction()"/>
+	      <img id="toggle_help_b" class="tsed_helpselect" onClick="tsapp.helpClick('help_b', event)"
+		     src="%%app_resources%%/hidden_help.png" width=16 height=16/>
 	      <div id="ts_intervals_msg" class="tsed_priority_message"></div>
 	    </div>
+	    <h3 class="tsed_box_header" id="ts_name_intervals"></h3>
 	    <table id="timescale_content_box" width="100%">
 	      <tr><td class="timescale_content_cell">
 		<table id="intervals_box" width="100%"><tr><td height="200px">&nbsp;</td></tr></table>
 	      </td></tr>
+	      <tr class="tsed_help_b"><td colspan="2">
+		<p class="tsed_help">The above pane displays the intervals and interval boundaries defined
+		for the currently open
+		timescale. The attributes of each interval are associated with its <strong>bottom</strong>
+		boundary. Click on any interval to edit the bottom boundary, or on any specific boundary to
+		edit it using the pane below. Overlapping intervals are allowed. To see an example of this,
+		open the timescale "British Ordovician Stages". Each interval has its own bottom boundary
+		record, so if two or more intervals have the same bottom age then there will be multiple
+		boundary records with the same age. To select the specific
+		bottom boundary corresponding to any interval, click on that interval.
+		The "spike" icons that may appear to the right of the boundary ages indicate GSSPs.</p>
+	      </td></tr>
 	      <tr><td class="timescale_content_cell">
 		<table id="bound_editor">
 		  <tr>
-		    <td colspan="3" style="text-align: center"><div id="be_bound_id" class="tsed_subbox_header"></div></tr>
+		    <td colspan="3" style="text-align: center"><div id="be_bound_id" class="tsed_subbox_header"></div>
+		  </td></tr>
 		  <tr>
 		    <td>Next&nbsp;up:</td>
 		    <td><select id="be_top_bound" onchange="tsapp.checkBoundEditor('top_bound')"></select></td>
-		    <td><div id="be_error_msg" style="color: red"></div></td></tr>
+		    <td><div id="be_error_msg" style="color: red"></div>
+		  </td></tr>
 		  <tr>
 		    <td width="5%">
 		      Above:<br/>
@@ -171,9 +227,36 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
 		      <div class="btn-holder" style="float: right">
 			<input type="button" class="btn" name="redisplay" value="Redisplay"
 				onclick="tsapp.redisplayIntervalsAction()"/></div>
-		    </td></tr>
+		  </td></tr>
+		  <tr class="tsed_help_b">
+		    <td></td>
+		    <td><p class="tsed_help">Interval names above and below this boundary</p></td>
+		    <td><p class="tsed_help">Boundary age & error 
+		      <span style="margin-left: 100px">Boundary basis & fraction</span></p></td>
+		  </tr>
 		</table>
-	      </td></tr></table>
+	      </td></tr>
+	      <tr class="tsed_help_b"><td colspan="2">
+		<p class="tsed_help">The above pane allows you to edit any interval boundary. The identifier
+		of the selected boundary will be displayed in the middle top of the pane. The <code>next up</code>
+		dropdown allows you to select a top boundary for the interval that the current boundary is the
+		bottom of. These "next up" links tie the boundary records together into sequences of intervals.
+		The <code>above</code> and <code>below</code> fields allow you to change the names of the intervals
+		above and below the current boundary. The two fields immediately to the right allow you to edit
+		the age and age error respectively.</p>
+		<p class="tsed_help">Immediately to the right of the age/error fields is a dropdown that allows
+		you to choose one of the four boundary types. For 'same as' and 'modeled as', the next element
+		displays and allows you to select or change the boundary or interval from another timescale
+		that is used as the basis for the boundary currently being edited. The rightmost field is used
+		only for boundaries of type 'modeled as', and it holds a decimal fraction indicating where inside
+		the basis interval the current boundary is located. A value of 0 indicates the bottom boundary of
+		the basis interval, 0.5 indicates half way through, etc.</p>
+		<p class="tsed_help">If you think the interval display in the upper pane has gotten messed
+		up, click the "redisplay" button to recompute it.</p>
+		<p class="tsed_help">To delete a boundary, clear the boundary age. That boundary will be deleted
+		when you save changes.</p>
+	      </td></tr>
+	    </table>
 	 </form>
       </td></tr>
     </table>
@@ -221,8 +304,31 @@ document.addEventListener("DOMContentLoaded", tsapp.initApp, false);
     <h3 class="tsed_box_header" id="ts_name_add_intervals">Add Intervals</h3>
     <table id="add_intervals_box" style="">
       <thead>
-	<tr style="vertical-align: top; height: 30px"><td>Interval names</td><td>Boundary ages</td></tr>
+	<tr style="vertical-align: top; height: 30px">
+	  <td>Interval names</td>
+	  <td>Boundary ages</td>
+	  <td>Age bases &nbsp;
+	      <img id="toggle_help_i" class="tsed_helpselect" onClick="tsapp.helpClick('help_i', event)"
+	           src="%%app_resources%%/hidden_help.png" width=16 height=16/></td>
+	</tr>
       </thead><tbody>
+	<tr class="tsed_help_i"><td colspan="3">
+	  <p class="tsed_help">This pane allows you to enter new intervals for the currently open timescale.
+	  Enter the interval names in the first column. Absolute boundary ages should be entered in the
+	  second column. If a boundary should have the same age as another boundary in the current timescale,
+	  you can instead choose it from the dropdown menu in the third column. This will cause the
+	  corresponding age to be automatically entered in the second column. If the boundary should have
+	  the same age as a boundary in a
+	  different timescale, you can choose "same as..." from the dropdown. This will allow you to select
+	  the basis boundary. If the boundary will be modeled on the basis of an interval in another
+	  timescale, you can choose "modeled as..." from the dropdown. This will allow you to select the
+	  basis interval. You will then need to fill in a fraction between 0 and 1 in the text field to the
+	  right.</p>
+	  <p class="tsed_help">If you want to add more intervals to the end ofthe current timescale,
+	  you should click on the dropdown corresponding to the top boundary in this layout, and choose
+	  the very bottom element. That will set the top boundary of the newly entered sequence of
+	  intervals to be the current bottom boundary of the timescale.</p>
+	</td></tr>
 	<tr><td></td>
 	    <td><input type="text" id="ia_age_0" size="8" onchange="tsapp.addIntervalsCheck('age', 0)"
 			class="tsed_add_age"/><input type="hidden" id="ia_type_0"></td>

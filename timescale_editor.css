@@ -27,17 +27,50 @@
     background-color: #47C7EA;
 }
 
-.tsed_model_match {
-    background-color: #9DC2A6;
+/* .tsed_model_match { */
+/*     background-color: #9DC2A6; */
+/* } */
+
+/* .tsed_model_close { */
+/*     background-color: #FAF6A0; */
+/* } */
+
+/* .tsed_model_computed { */
+/*     background-color: #aaa; */
+/* } */
+
+.tsed_help {
+    font-style: italic;
+    font-size: 0.9em;
 }
 
-.tsed_model_close {
-    background-color: #FAF6A0;
+
+.tsed_helpselect {
+    position: relative;
+    top: 1px;
 }
 
-.tsed_model_computed {
-    background-color: #aaa;
+
+.tsed_help_a {
+    display: none;
 }
+
+
+.tsed_help_b {
+    display: none;
+}
+
+
+.tsed_help_i {
+    display: none;
+}
+
+
+.tsed_doc {
+    font-size: 0.9em;
+    text-decoration: none;
+}
+
 
 .tsed_diff {
     color: #AD2800;
@@ -315,6 +348,11 @@ td.bound_cell {
 
 .spike {
     position: absolute;
+}
+
+h2 {
+    font-weight: bold;
+    font-size: 1em;
 }
 
 .dlMessageBox {

@@ -60,6 +60,8 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 		     intervals: { } };
     
     this.appstate = appstate;
+
+    var visible = { };
     
     var international_no = { 'tsc:1': 1, 'tsc:2': 2, 'tsc:3': 3,
 			     'tsc:4': 4, 'tsc:5' : 5, 'tsc:10' : 10 };
@@ -212,6 +214,51 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	// clear timescale attrs form
 	
 	// clearTimescaleAttrs();
+    }
+
+    // HELP TEXT VISIBILITY
+
+    // The following method should be called if the user clicks the 'help' button for one of the // sections.
+    // The help text and related elements for the section will then be toggled.  The event object responsible
+    // for this action can be passed as the second parameter, or else it will be assumed to be the currently
+    // executing event.
+    
+    function helpClick ( section_id, e )
+    {
+	showHideHelp(section_id);
+	
+	// Stop the event from propagating, because it has now been carried out.
+	
+	if ( !e ) e = window.event;
+	e.stopPropagation();
+    }
+    
+    this.helpClick = helpClick;
+    
+    // Adjust the visiblity of the help text for the specified section of the application.  If the
+    // action is 'show', make it visible.  If 'hide', make it invisible.  Otherwise, toggle it.
+    // All of the help text elements have a CSS class of 'tsed_' + section_id.  The corresponding
+    // button has the id 'toggle_' + section id.
+    
+    function showHideHelp ( section_id, action )
+    {
+	// If the help text is visible and we're either hiding or toggling, then do so.
+	
+	if ( visible[section_id] && ( action == undefined || action == "hide" ) )
+	{
+	    visible[section_id] = 0;
+	    $('#toggle_' + section_id).attr('src', resource_url + "/hidden_help.png");
+	    $('.tsed_' + section_id).hide();
+	}
+	
+	// If the help text is invisible and we're showing or toggling, then do so.
+	
+	else if ( action == undefined || action == "show" )
+	{
+	    visible[section_id] = 1;
+	    $('#toggle_' + section_id).attr('src', resource_url + "/visible_help.png");
+	    $('.tsed_' + section_id).show();
+	}
     }
     
     // PANE SELECTION
@@ -1794,8 +1841,8 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 
     function boundLinkContent ( bound_id, range_id )
     {
-	console.log("bound_id = " + bound_id);
-	console.log("api_data.bounds_id[bound_id] = " + api_data.bounds_id[bound_id]);
+	// console.log("bound_id = " + bound_id);
+	// console.log("api_data.bounds_id[bound_id] = " + api_data.bounds_id[bound_id]);
 	var name = api_data.bounds_id[bound_id].inm;
 
 	if ( ! name && api_data.bounds_id[bound_id].age == "0" )
@@ -2298,6 +2345,15 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 	    $(document.intervals_form.save).removeClass('tsed_active_save');
 	}
     }
+
+    // This function is called when the 'Define intervals' control is activated.
+    
+    function defineIntervalsAction ( )
+    {
+	window.alert("This function is not implemented yet.");
+    }
+
+    this.defineIntervalsAction = defineIntervalsAction;
     
     // This function is called when the 'Revert' control is activated.
     
@@ -3590,8 +3646,8 @@ function TimescaleEditorApp ( data_url, resource_url, is_contributor )
 		    setElementValue("be_age", new_age);
 		}
 		
-		else
-		    new_type = undefined;
+		// else
+		//     new_type = undefined;
 		
 		new_fraction = '';
 		setElementValue("be_fraction", '');
